@@ -22,6 +22,87 @@
 @keyframes fadeUp { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
 @keyframes pop { from { opacity: 0; transform: scale(.96); } to { opacity: 1; transform: none; } }
 
+/* ---------- 自适应栅格容器（手机单列，平板多列） ---------- */
+.wb-grid, .rec-grid { display: grid; gap: 12px; grid-template-columns: 1fr; }
+
+/* ---------- 平板（≥600px）：更宽、更大字号、多列卡片 ---------- */
+@media (min-width: 600px) {
+  .view { max-width: 880px; padding: 18px 22px 110px; }
+  .app-header { padding: 22px 26px 20px; }
+  .app-header h1 { font-size: 27px; }
+  .app-header .subtitle { font-size: 14px; }
+  .header-badge { width: 54px; height: 54px; font-size: 28px; }
+  .tab { font-size: 13px; }
+  .section-title { font-size: 20px; }
+  .big-word { font-size: 66px; }
+  .big-pinyin { font-size: 36px; }
+  .char-grid { gap: 14px; }
+  .char-cell { width: 66px; height: 74px; font-size: 34px; }
+  .stat-grid { grid-template-columns: repeat(4, 1fr); }
+  .stat .num { font-size: 34px; }
+  .pie { width: 160px; height: 160px; }
+  .pie-wrap { gap: 24px; }
+  .wb-grid { grid-template-columns: repeat(2, 1fr); }
+  .rec-grid { grid-template-columns: repeat(2, 1fr); }
+  .bar-chart { height: 170px; }
+  .btn { font-size: 18px; padding: 14px 18px; }
+}
+
+/* ---------- 大屏 Pad / 桌面（≥1024px）：左侧导航栏 + 更宽松布局 ---------- */
+@media (min-width: 1024px) {
+  body {
+    display: grid;
+    grid-template-columns: 248px 1fr;
+    grid-template-rows: auto 1fr;
+    min-height: 100vh;
+  }
+  .app-header {
+    grid-column: 1 / -1; grid-row: 1;
+    border-radius: 0;
+    padding: 22px 36px;
+  }
+  .app-header h1 { font-size: 28px; }
+  .header-badge { width: 56px; height: 56px; font-size: 28px; }
+  .tab-bar {
+    position: static;
+    grid-column: 1; grid-row: 2;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+    padding: 22px 14px;
+    border-top: none;
+    border-right: 1px solid var(--line);
+    box-shadow: none;
+    background: #fff;
+  }
+  .tab {
+    flex-direction: row;
+    justify-content: flex-start;
+    gap: 12px;
+    padding: 16px 18px;
+    font-size: 17px;
+    border-radius: 14px;
+    color: var(--muted);
+    font-weight: 700;
+  }
+  .tab.active { background: var(--primary-l); color: var(--primary-d); }
+  .tab.active::after { display: none; }
+  .tab .rbadge { position: static; top: auto; right: auto; margin-left: auto; }
+  .view {
+    grid-column: 2; grid-row: 2;
+    width: 100%;
+    max-width: 1240px;
+    margin: 0 auto;
+    padding: 28px 40px 48px;
+  }
+  .stat-grid { grid-template-columns: repeat(4, 1fr); }
+  .wb-grid { grid-template-columns: repeat(3, 1fr); }
+  .rec-grid { grid-template-columns: repeat(2, 1fr); }
+  .big-word { font-size: 72px; }
+  .char-cell { width: 72px; height: 82px; font-size: 36px; }
+  .toast { bottom: 28px; }
+}
+
 html, body {
   margin: 0; padding: 0;
   background:
