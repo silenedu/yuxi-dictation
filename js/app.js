@@ -816,17 +816,7 @@
   });
 
   /* ---------- 启动 ---------- */
-  var SW_VER = "v7";
-  if ("serviceWorker" in navigator) {
-    window.addEventListener("load", function () {
-      navigator.serviceWorker.register("sw.js?v=" + SW_VER).catch(function () {});
-    });
-    var swReloaded = false;
-    navigator.serviceWorker.addEventListener("controllerchange", function () {
-      if (swReloaded) return;
-      swReloaded = true;
-      location.reload();
-    });
-  }
+  // 注意：Service Worker 的注册放在 index.html 末尾内联脚本里完成，
+  // 这样即使浏览器缓存了旧版 app.js，也不会锁死 SW 版本（避免更新卡住）。
   setTab("dash");
 })();
