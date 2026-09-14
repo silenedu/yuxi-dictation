@@ -1,21 +1,23 @@
 :root {
-  --bg: #EAF1FB;
-  --bg2: #F4F8FF;
+  /* 童趣暖色主题：阳光珊瑚 + 柠檬黄 + 薄荷绿 */
+  --bg: #FFF3E9;
+  --bg2: #FFFBF5;
   --card: #FFFFFF;
-  --primary: #1E63D6;
-  --primary-d: #143C8C;
-  --primary-l: #E8F0FE;
-  --accent: #FFC83D;
+  --primary: #FF8A5B;
+  --primary-d: #E8653A;
+  --primary-l: #FFE7DA;
+  --accent: #FFC93C;
   --orange: #FF7A45;
-  --blue: #2E8BFF;
-  --cyan: #19C3D6;
-  --green: #1FB873;
-  --red: #FF5A5F;
-  --text: #1B2540;
-  --muted: #6B7A9C;
-  --line: #E4ECF8;
-  --shadow: 0 10px 26px rgba(28, 62, 140, 0.12);
-  --radius: 20px;
+  --blue: #4FB0E5;
+  --cyan: #2BC4A8;
+  --green: #5BC97A;
+  --red: #FF6B6B;
+  --text: #3D3340;
+  --muted: #9C8E96;
+  --line: #F3E7DC;
+  --shadow: 0 10px 26px rgba(232, 101, 58, 0.14);
+  --radius: 22px;
+  --header-h: 86px; /* 吸顶头部高度，供筛选条/批改条定位 */
 }
 
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
@@ -27,6 +29,7 @@
 
 /* ---------- 平板（≥600px）：更宽、更大字号、多列卡片 ---------- */
 @media (min-width: 600px) {
+  :root { --header-h: 92px; }
   .view { max-width: 880px; padding: 18px 22px 110px; }
   .app-header { padding: 22px 26px 20px; }
   .app-header h1 { font-size: 27px; }
@@ -43,28 +46,31 @@
   .pie-wrap { gap: 24px; }
   .wb-grid { grid-template-columns: repeat(2, 1fr); }
   .rec-grid { grid-template-columns: repeat(2, 1fr); }
-  .bar-chart { height: 170px; }
   .btn { font-size: 18px; padding: 14px 18px; }
 }
 
-/* ---------- 大屏 Pad / 桌面（≥1024px）：左侧导航栏 + 更宽松布局 ---------- */
-@media (min-width: 1024px) {
+/* ---------- Pad 横屏 / 桌面：左侧导航栏 + 更宽松布局 ---------- */
+/* 命中条件：宽屏（≥900px）或 横屏且宽度≥768px（平板横屏自适应） */
+@media (min-width: 900px), (orientation: landscape) and (min-width: 768px) {
+  :root { --header-h: 88px; }
   body {
     display: grid;
-    grid-template-columns: 248px 1fr;
+    grid-template-columns: 232px 1fr;
     grid-template-rows: auto 1fr;
     min-height: 100vh;
   }
   .app-header {
     grid-column: 1 / -1; grid-row: 1;
+    position: sticky; top: 0; z-index: 40;
     border-radius: 0;
-    padding: 22px 36px;
+    padding: 20px 32px;
   }
-  .app-header h1 { font-size: 28px; }
-  .header-badge { width: 56px; height: 56px; font-size: 28px; }
+  .app-header h1 { font-size: 26px; }
+  .header-badge { width: 54px; height: 54px; font-size: 28px; }
   .tab-bar {
-    position: static;
+    position: sticky; top: var(--header-h); align-self: start;
     grid-column: 1; grid-row: 2;
+    height: calc(100vh - var(--header-h));
     flex-direction: column;
     align-items: stretch;
     gap: 8px;
@@ -72,7 +78,8 @@
     border-top: none;
     border-right: 1px solid var(--line);
     box-shadow: none;
-    background: #fff;
+    background: var(--card);
+    overflow-y: auto;
   }
   .tab {
     flex-direction: row;
@@ -92,7 +99,7 @@
     width: 100%;
     max-width: 1240px;
     margin: 0 auto;
-    padding: 28px 40px 48px;
+    padding: 24px 36px 40px;
   }
   .stat-grid { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
   .wb-grid { grid-template-columns: repeat(3, 1fr); }
@@ -106,26 +113,26 @@
 html, body {
   margin: 0; padding: 0;
   background:
-    radial-gradient(circle at 10% 6%, rgba(46, 139, 255, 0.10), transparent 40%),
-    radial-gradient(circle at 92% 2%, rgba(255, 200, 61, 0.16), transparent 38%),
-    radial-gradient(circle at 85% 55%, rgba(25, 195, 214, 0.07), transparent 42%),
+    radial-gradient(circle at 10% 6%, rgba(255, 138, 91, 0.12), transparent 42%),
+    radial-gradient(circle at 92% 2%, rgba(255, 201, 60, 0.20), transparent 40%),
+    radial-gradient(circle at 85% 55%, rgba(43, 196, 168, 0.08), transparent 44%),
     var(--bg);
   background-attachment: fixed;
   color: var(--text);
-  font-family: "Baloo 2", "ZCOOL KuaiLe", "PingFang SC", "Microsoft YaHei", "Comic Sans MS", sans-serif;
+  font-family: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Heiti SC", system-ui, -apple-system, sans-serif;
   font-size: 18px;
-  line-height: 1.55;
+  line-height: 1.6;
 }
 
-/* ---------- Header（无火箭，简洁男孩感） ---------- */
+/* ---------- Header（吸顶 + 阳光暖色） ---------- */
 .app-header {
-  position: relative;
+  position: sticky; top: 0; z-index: 30;
   display: flex; align-items: center; justify-content: space-between;
   padding: 20px 20px 18px;
-  background: linear-gradient(120deg, #1E63D6 0%, #2E8BFF 58%, #19C3D6 100%);
+  background: linear-gradient(120deg, #FF9A6C 0%, #FFB15C 48%, #FFD06B 100%);
   color: #fff;
   border-radius: 0 0 30px 30px;
-  box-shadow: 0 8px 22px rgba(28, 62, 140, 0.28);
+  box-shadow: 0 8px 22px rgba(232, 101, 58, 0.28);
 }
 .app-header h1 { margin: 0; font-size: 23px; font-weight: 800; letter-spacing: 1px; }
 .app-header .subtitle { margin: 2px 0 0; font-size: 13px; opacity: 0.9; }
@@ -243,8 +250,24 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--p
 .quiz-stage { text-align: center; padding: 18px 14px; }
 .quiz-topbar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
 .quiz-index { font-size: 14px; color: var(--muted); font-weight: 700; }
-.prog { height: 8px; background: var(--line); border-radius: 999px; overflow: hidden; margin-bottom: 16px; }
-.prog-fill { height: 100%; background: linear-gradient(90deg, var(--primary), var(--cyan)); border-radius: 999px; transition: width .3s ease; }
+/* 好看的进度条 */
+.quiz-prog {
+  background: var(--card); border-radius: 16px; padding: 12px 14px;
+  margin-bottom: 16px; box-shadow: var(--shadow); text-align: left;
+}
+.quiz-prog-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+.quiz-prog-label { font-size: 13px; color: var(--muted); font-weight: 700; }
+.quiz-prog-pct { font-size: 16px; font-weight: 800; color: var(--primary-d); }
+.prog { height: 16px; background: var(--line); border-radius: 999px; position: relative; }
+.prog-fill {
+  height: 100%; background: linear-gradient(90deg, var(--primary), var(--accent));
+  border-radius: 999px; transition: width .35s cubic-bezier(.4, 1.2, .5, 1); position: relative;
+}
+.prog-fill::after {
+  content: ""; position: absolute; right: 0; top: 50%; transform: translate(50%, -50%);
+  width: 20px; height: 20px; background: #fff; border: 3px solid var(--primary);
+  border-radius: 50%; box-shadow: 0 2px 6px rgba(232, 101, 58, .35);
+}
 .read-btn { font-size: 16px; }
 
 /* ---------- Wrong-char selector ---------- */
@@ -260,7 +283,7 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--p
 
 /* ---------- Review / grading ---------- */
 .grade-bar {
-  position: sticky; top: 0; z-index: 5;
+  position: sticky; top: var(--header-h); z-index: 5;
   display: flex; align-items: center; justify-content: space-between;
   gap: 8px; background: var(--primary-l);
   border-radius: 14px; padding: 8px 10px; margin-bottom: 12px;
@@ -290,12 +313,6 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--p
 .stat .num { font-size: 30px; font-weight: 800; color: var(--primary-d); }
 .stat .lbl { font-size: 13px; color: var(--muted); }
 
-.bar-chart { display: flex; align-items: flex-end; gap: 4px; height: 140px; padding-top: 10px; }
-.bar-col { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; height: 100%; }
-.bar { width: 70%; background: var(--blue); border-radius: 6px 6px 0 0; min-height: 2px; transition: height .4s ease; }
-.bar.zero { background: var(--line); }
-.bar-label { font-size: 10px; color: var(--muted); margin-top: 4px; }
-
 .pie-wrap { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
 .pie { width: 130px; height: 130px; border-radius: 50%; flex: 0 0 auto; }
 .legend { font-size: 14px; }
@@ -309,16 +326,27 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--p
 .list-word { font-size: 19px; font-weight: 800; }
 .del { color: var(--red); border: none; background: transparent; font-size: 14px; cursor: pointer; font-weight: 700; }
 
+/* ---------- 词语库：吸顶筛选条（按单元筛选） ---------- */
+.bank-filter {
+  position: sticky; top: var(--header-h); z-index: 6;
+  display: flex; gap: 10px; flex-wrap: wrap; align-items: center;
+  padding: 12px; margin-bottom: 12px;
+  background: var(--card); border: 1px solid var(--line); border-radius: 16px;
+  box-shadow: var(--shadow);
+}
+.bank-filter select { flex: 0 0 auto; width: auto; min-width: 130px; font-size: 15px; }
+.bank-filter input { flex: 1 1 160px; font-size: 15px; }
+
 /* ---------- Manual add form ---------- */
 .manual-form .photo-prev { margin-top: 8px; }
 .manual-form .ph-img { width: 100%; max-width: 240px; border-radius: 12px; border: 2px solid var(--line); display: block; }
 .manual-form .hint { font-size: 12px; color: var(--muted); margin-top: 4px; }
 
-/* ---------- Records (在线练习记录) ---------- */
+/* ---------- Records (闯关记录) ---------- */
 .rec { padding: 0; overflow: hidden; animation: fadeUp .26s ease both; }
 .rec-top {
   display: flex; justify-content: space-between; align-items: center;
-  padding: 14px 16px; background: linear-gradient(120deg, var(--primary-l), #EAF6FF);
+  padding: 14px 16px; background: linear-gradient(120deg, var(--primary-l), #FFF6EC);
 }
 .rec-date { font-size: 18px; font-weight: 800; color: var(--primary-d); }
 .rec-mode { font-size: 13px; color: var(--muted); }
@@ -355,7 +383,7 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--p
   box-shadow: 0 24px 60px rgba(15, 25, 55, 0.4);
   display: flex; flex-direction: column; overflow: hidden; animation: pop .2s ease;
 }
-.modal-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 14px 18px; background: linear-gradient(120deg, #1E63D6, #2E8BFF); color: #fff; font-weight: 800; font-size: 17px; }
+.modal-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 14px 18px; background: linear-gradient(120deg, #FF8A5B, #FFB15C); color: #fff; font-weight: 800; font-size: 17px; }
 .modal-body { padding: 16px; overflow-y: auto; }
 .wcard { background: #fff; border-radius: 16px; padding: 14px 16px; margin-bottom: 10px; box-shadow: var(--shadow); display: flex; align-items: center; justify-content: space-between; gap: 10px; }
 .wcard .w-main { font-size: 24px; font-weight: 800; }
