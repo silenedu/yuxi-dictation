@@ -27,6 +27,7 @@
       .replace(/a/g, "ɑ");
   }
   function py(p) { return toA(p); }
+  function pySpan(p) { return p ? '<span class="pinyin">' + py(p) + "</span>" : ""; }
 
   /* ---------- 遗忘曲线复习（间隔复习法） ---------- */
   // 每通过一次复习，下次复习间隔拉长；再次写错则回到第 1 天。
@@ -248,8 +249,9 @@
       '<div class="card quiz-stage">' +
       '<div class="quiz-topbar">' +
       '<button class="icon-btn" data-act="exit">✕ 退出练习</button>' +
-      '<div class="quiz-index">第 ' + (i + 1) + " / " + total + " 个</div>" +
+      '<div class="quiz-index">第 ' + (i + 1) + " / " + total + "</div>" +
       "</div>" +
+      '<div class="prog"><div class="prog-fill" style="width:' + Math.round((i + 1) / total * 100) + '%"></div></div>' +
       promptHtml +
       '<div class="row" style="justify-content:center;margin-top:18px">' +
       '<button class="btn ghost" data-act="reveal">' + (revealed ? "隐藏答案" : "显示答案") + "</button>" +
@@ -283,7 +285,7 @@
 
       return '<div class="review-item ' + (r.correct ? "" : "wrong") + '">' +
         '<div class="review-head">' +
-        '<div><span class="list-word">' + esc(w.word) + '</span> <span class="pinyin">' + py(w.pinyin) + "</span></div>" +
+        '<div><span class="list-word">' + esc(w.word) + '</span> ' + pySpan(w.pinyin) + "</div>" +
         '<div class="judge">' +
         '<button class="btn yes ' + (r.correct ? "on" : "") + '" data-act="judge" data-i="' + i + '" data-v="1">对 ✓</button>' +
         '<button class="btn no ' + (!r.correct ? "on" : "") + '" data-act="judge" data-i="' + i + '" data-v="0">错 ✗</button>' +
@@ -361,13 +363,16 @@
       '<div class="section-title">✍️ 手动添加错词</div>' +
       '<p class="muted">把纸面默写拍下来或填进来，直接进错词本，按遗忘曲线复习。</p>' +
       '<label class="field"><span>词语</span><input id="mw" type="text" placeholder="例如：彩虹" /></label>' +
-      '<label class="field"><span>拼音（用普通 a 即可）</span><input id="mp" type="text" placeholder="例如：cǎi hóng" /></label>' +
       '<label class="field"><span>错在哪（可选）</span>' + seg + "</label>" +
-      '<label class="field"><span>拍照 / 上传图片（可选）</span>' +
-      '<input type="file" id="mPhoto" accept="image/*" capture="environment" />' +
+      '<div class="field"><span class="field-label">照片（拍照或相册，二选一，可选）</span>' +
+      '<div class="seg" id="mPhotoMode">' +
+      '<button type="button" data-act="mcamera">📷 拍照</button>' +
+      '<button type="button" data-act="malbum">🖼️ 从相册选</button>' +
+      '</div>' +
+      '<input type="file" id="mPhoto" accept="image/*" style="display:none" />' +
       '<div id="mPhotoPrev" class="photo-prev"></div>' +
       '<div class="hint">照片仅保存在本机，不上传任何云端。</div>' +
-      "</label>" +
+      '</div>' +
       '<label class="field"><span>备注（可选）</span><input id="mn" type="text" placeholder="例如：和“红”混淆" /></label>' +
       '<div class="row between">' +
       '<button class="btn ghost" data-act="cancelmanual">取消</button>' +
@@ -484,7 +489,7 @@
             var ph = photos[it.word] ? '<img class="rec-photo" src="' + photos[it.word] + '">' : "";
             var tg = it.type ? '<span class="badge red">' + ATTR_LABEL[it.type] + "</span>" : "";
             return '<div class="rec-wrong"><span class="rec-word">' + esc(it.word) + '</span>' +
-              ' <span class="pinyin">' + py(it.pinyin) + "</span>" + tg + ph + "</div>";
+              " " + pySpan(it.pinyin) + tg + ph + "</div>";
           }).join("")
         : '<div class="rec-wrong"><span class="muted">全部正确，太棒了！🌟</span></div>';
       return '<div class="card rec">' +
@@ -513,7 +518,7 @@
   }
 
   function pieChart(totals) {
-    var colors = { tone_same: "#4A90D9", shape_same: "#FF8A65", stroke: "#F4B400", radical: "#57B894", unknown: "#9B6DD6" };
+    var colors = { tone_same: "#4A90D9", shape_same: "#FF8A65", stroke: "#F4B400", pinyin: "#57B894", unknown: "#9B6DD6" };
     var keys = Object.keys(totals);
     var sum = keys.reduce(function (a, k) { return a + totals[k]; }, 0);
     if (!sum) return '<p class="muted">暂无错字归因数据。</p>';
@@ -543,6 +548,14 @@
       manualType = (manualType === mk) ? null : mk;
       var mseg = $("#mType");
       if (mseg) mseg.querySelectorAll("button").forEach(function (b) { b.classList.toggle("on", b.dataset.k === manualType); });
+      return;
+    }
+    if (act === "mcamera" || act === "malbum") {
+      var fi = $("#mPhoto"); if (!fi) return;
+      if (act === "mcamera") fi.setAttribute("capture", "environment"); else fi.removeAttribute("capture");
+      var pm = $("#mPhotoMode");
+      if (pm) pm.querySelectorAll("button").forEach(function (b) { b.classList.toggle("on", b.dataset.act === act); });
+      fi.click();
       return;
     }
     if (act === "manualsave") return doManualSave();
@@ -728,8 +741,8 @@
 
   function doManualSave() {
     var word = $("#mw").value.trim();
-    var pinyin = $("#mp").value.trim();
-    if (!word || !pinyin) { toast("词语和拼音都要填"); return; }
+    if (!word) { toast("请填写词语"); return; }
+    var pinyin = ($("#mp") ? $("#mp").value.trim() : "");
     var note = $("#mn").value.trim();
     var type = manualType;
     records.push({ id: Date.now(), date: today(), mode: "manual", scope: "manual", items: [{ word: word, pinyin: pinyin, correct: false, wrongChars: [], type: type }], note: note });
@@ -758,7 +771,7 @@
   });
 
   /* ---------- 启动 ---------- */
-  var SW_VER = "v3";
+  var SW_VER = "v4";
   if ("serviceWorker" in navigator) {
     window.addEventListener("load", function () {
       navigator.serviceWorker.register("sw.js?v=" + SW_VER).catch(function () {});
