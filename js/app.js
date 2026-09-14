@@ -227,13 +227,17 @@
         (revealed ? '<div class="big-pinyin">' + py(w.pinyin) + "</div>" : '<p class="muted">孩子看词语写拼音，写完后点“显示拼音”核对。</p>');
     }
 
+    var pct = Math.round((i + 1) / total * 100);
     view.innerHTML =
       '<div class="card quiz-stage">' +
       '<div class="quiz-topbar">' +
       '<button class="icon-btn" data-act="exit">✕ 退出练习</button>' +
-      '<div class="quiz-index">第 ' + (i + 1) + " / " + total + "</div>" +
+      '<div class="quiz-index">第 ' + (i + 1) + " / " + total + " 题</div>" +
       "</div>" +
-      '<div class="prog"><div class="prog-fill" style="width:' + Math.round((i + 1) / total * 100) + '%"></div></div>' +
+      '<div class="quiz-prog">' +
+      '<div class="quiz-prog-row"><span class="quiz-prog-label">完成进度</span><span class="quiz-prog-pct">' + pct + "%</span></div>" +
+      '<div class="prog"><div class="prog-fill" style="width:' + pct + '%"></div></div>' +
+      "</div>" +
       promptHtml +
       '<div class="row" style="justify-content:center;margin-top:18px">' +
       '<button class="btn ghost" data-act="reveal">' + (revealed ? "隐藏答案" : "显示答案") + "</button>" +
@@ -293,9 +297,10 @@
     return { units: units, keys: keys };
   }
 
-  function bankListHtml(units, keys, q) {
+  function bankListHtml(units, keys, q, unit) {
     var out = "";
     keys.forEach(function (k) {
+      if (unit && String(k) !== String(unit)) return;
       var list = units[k].filter(function (w) {
         if (!q) return true;
         var s = (w.word + " " + w.pinyin + " " + (w.lesson || "")).toLowerCase();
@@ -318,6 +323,7 @@
   function renderBank() {
     var cu = computeUnits();
     var q = (window.__bankQ || "");
+    var unit = (window.__bankUnit || "");
 
     var html = '<div class="card">' +
       '<div class="section-title">➕ 添加自定义词语</div>' +
@@ -330,9 +336,17 @@
       '<button class="btn primary block" data-act="addword">添加</button>' +
       "</div>";
 
+    var unitOpts = '<option value="">全部单元</option>';
+    for (var u = 1; u <= 8; u++) {
+      unitOpts += '<option value="' + u + '"' + (String(u) === String(unit) ? " selected" : "") + ">第 " + u + " 单元</option>";
+    }
+
     html += '<div class="card"><div class="section-title">📚 词语表（统编版二年级上册 · 示例）</div>';
-    html += '<input id="bankSearch" type="text" placeholder="搜索词语 / 拼音 / 课文" value="' + esc(q) + '" style="margin-bottom:10px" />';
-    html += '<div id="bankList">' + bankListHtml(cu.units, cu.keys, q) + "</div></div>";
+    html += '<div class="bank-filter">' +
+      '<select id="bankUnit">' + unitOpts + '</select>' +
+      '<input id="bankSearch" type="text" placeholder="搜索词语 / 拼音 / 课文" value="' + esc(q) + '" />' +
+      '</div>';
+    html += '<div id="bankList">' + bankListHtml(cu.units, cu.keys, q, unit) + "</div></div>";
     view.innerHTML = html;
   }
 
@@ -365,7 +379,7 @@
   function renderWrong() {
     var list = aggregateWrong();
     if (!list.length) {
-      view.innerHTML = '<div class="card empty">🎉 还没有错词！<br/>去“去练习”做几次默写，或点下方手动添加。</div>' +
+      view.innerHTML = '<div class="card empty">🎉 还没有错词！<br/>去"词语听写"做几次默写，或点下方手动添加。</div>' +
         (showManual ? manualFormHtml() : '<button class="btn blue block" data-act="toggelmanual" style="margin-top:10px">➕ 手动添加错词</button>');
       return;
     }
@@ -401,20 +415,10 @@
 
   /* ---------- 看板 ---------- */
   function renderDash() {
-    var totalItems = 0, totalCorrect = 0;
-    records.forEach(function (r) { r.items.forEach(function (it) { totalItems++; if (it.correct) totalCorrect++; }); });
-    var acc = totalItems ? Math.round((totalCorrect / totalItems) * 100) : 0;
+    var totalItems = 0;
+    records.forEach(function (r) { totalItems += r.items.length; });
     var masteredCount = Object.keys(mastered).filter(function (k) { return mastered[k]; }).length;
     var due = dueWords();
-
-    // 近 14 天正确率
-    var days = dailyStats(14);
-    var maxAcc = 100;
-    var bars = days.map(function (d) {
-      var h = d.total ? Math.max(4, Math.round(d.acc / maxAcc * 100)) : 2;
-      return '<div class="bar-col"><div class="bar ' + (d.total ? "" : "zero") + '" style="height:' + h + '%" title="' + d.key + " 正确率" + d.acc + '%"></div>' +
-        '<div class="bar-label">' + d.key.slice(5) + "</div></div>";
-    }).join("");
 
     var wrong = aggregateWrong().slice(0, 10);
     var topHtml = wrong.length ? wrong.map(function (w, i) {
@@ -428,11 +432,9 @@
       '<div class="stat-grid">' +
       stat(records.length, "练习次数") +
       stat(totalItems, "累计默写词数") +
-      stat(acc + "%", "总正确率") +
       stat(masteredCount, "已掌握错词", masteredCount ? "show-mastered" : null) +
       stat(due.length, "今日待复习", due.length ? "show-due" : null) +
       "</div>" +
-      '<div class="card"><div class="section-title">📈 近 14 天正确率</div><div class="bar-chart">' + bars + "</div></div>" +
       '<div class="card"><div class="section-title">🔝 高频错词 Top</div>' + topHtml + "</div>" +
       '<div class="card"><div class="section-title">🧩 错字归因分布</div>' + pie + "</div>";
   }
@@ -474,14 +476,14 @@
   }
   function closeModal() { modal.classList.add("hidden"); }
 
-  /* ---------- 在线练习记录（历史） ---------- */
+  /* ---------- 闯关记录（历史） ---------- */
   function renderRecords() {
     if (!records.length) {
-      view.innerHTML = '<div class="card empty">📭 还没有练习记录。<br/>去“去练习”做几次，或手动添加错词，这里就会留下历史。</div>';
+      view.innerHTML = '<div class="card empty">📭 还没有闯关记录。<br/>去"词语听写"做几次，或手动添加错词，这里就会留下历史。</div>';
       return;
     }
     var sorted = records.slice().sort(function (a, b) { return b.id - a.id; });
-    var html = '<div class="card"><div class="section-title">📒 在线练习记录</div>' +
+    var html = '<div class="card"><div class="section-title">🏆 闯关记录</div>' +
       '<p class="muted">共 ' + records.length + ' 次练习，按时间倒序排列。</p></div>';
     html += sorted.map(function (r) {
       var total = r.items.length;
@@ -509,21 +511,8 @@
     view.innerHTML = '<div class="rec-grid">' + html + "</div>";
   }
 
-  function dailyStats(n) {
-    var res = [], now = new Date();
-    for (var i = n - 1; i >= 0; i--) {
-      var d = new Date(now); d.setDate(now.getDate() - i);
-      var key = d.toISOString().slice(0, 10), total = 0, correct = 0;
-      records.forEach(function (r) {
-        if (r.date === key) r.items.forEach(function (it) { total++; if (it.correct) correct++; });
-      });
-      res.push({ key: key, total: total, correct: correct, acc: total ? Math.round(correct / total * 100) : 0 });
-    }
-    return res;
-  }
-
   function pieChart(totals) {
-    var colors = { tone_same: "#4A90D9", shape_same: "#FF8A65", stroke: "#F4B400", pinyin: "#57B894", unknown: "#9B6DD6" };
+    var colors = { tone_same: "#4FB0E5", shape_same: "#FF8A5B", stroke: "#FFC93C", pinyin: "#2BC4A8", unknown: "#9B6DD6" };
     var keys = Object.keys(totals);
     var sum = keys.reduce(function (a, k) { return a + totals[k]; }, 0);
     if (!sum) return '<p class="muted">暂无错字归因数据。</p>';
@@ -670,12 +659,19 @@
       window.__bankQ = e.target.value;
       var cu = computeUnits();
       var list = $("#bankList");
-      if (list) list.innerHTML = bankListHtml(cu.units, cu.keys, window.__bankQ);
+      if (list) list.innerHTML = bankListHtml(cu.units, cu.keys, window.__bankQ, window.__bankUnit || "");
     }
   });
 
   // 拍照 / 上传图片：压缩后暂存
   view.addEventListener("change", function (e) {
+    if (e.target && e.target.id === "bankUnit") {
+      window.__bankUnit = e.target.value;
+      var cu = computeUnits();
+      var list = $("#bankList");
+      if (list) list.innerHTML = bankListHtml(cu.units, cu.keys, window.__bankQ || "", window.__bankUnit);
+      return;
+    }
     if (e.target && e.target.id === "mPhoto") {
       var f = e.target.files && e.target.files[0];
       if (!f) return;
@@ -752,7 +748,7 @@
     save(LS.records, records);
     save(LS.review, reviewState);
     practice = null;
-    toast("已保存，去「在线练习记录」看看吧！📒");
+    toast("已保存，去「闯关记录」看看吧！🏆");
     setTab("records");
   }
 
@@ -820,7 +816,7 @@
   });
 
   /* ---------- 启动 ---------- */
-  var SW_VER = "v6";
+  var SW_VER = "v7";
   if ("serviceWorker" in navigator) {
     window.addEventListener("load", function () {
       navigator.serviceWorker.register("sw.js?v=" + SW_VER).catch(function () {});
