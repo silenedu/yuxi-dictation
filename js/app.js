@@ -47,7 +47,7 @@
   }
 
   /* ---------- 存储 ---------- */
-  var LS = { custom: "yuxi_custom_v1", records: "yuxi_records_v1", mastered: "yuxi_mastered_v1", hidden: "yuxi_hidden_v1", review: "yuxi_review_v1" };
+  var LS = { custom: "yuxi_custom_v1", records: "yuxi_records_v1", mastered: "yuxi_mastered_v1", hidden: "yuxi_hidden_v1", review: "yuxi_review_v1", photos: "yuxi_photos_v1" };
   function load(k, d) { try { var v = JSON.parse(localStorage.getItem(k)); return v == null ? d : v; } catch (e) { return d; } }
   function save(k, v) { localStorage.setItem(k, JSON.stringify(v)); }
 
@@ -56,6 +56,14 @@
   var mastered = load(LS.mastered, {});
   var hidden = load(LS.hidden, {});
   var reviewState = load(LS.review, {}); // { 词: {stage, due, lastWrong, lastReview, count} }
+  var photos = load(LS.photos, {});      // { 词: dataURL(压缩后的照片) }
+
+  var MODE_LABEL = { tingxie: "听写报词", pin2word: "看拼音写词", word2pin: "看词写拼音", manual: "手动录入", review: "智能复习", wrong: "错词复习" };
+
+  // 手动录入 / 练习页临时状态
+  var showManual = false;
+  var manualType = null;
+  var pendingPhoto = null;
 
   function allWords() { return WORD_BANK.concat(customWords); }
 
@@ -168,6 +176,7 @@
     if (currentTab === "bank") return renderBank();
     if (currentTab === "wrong") return renderWrong();
     if (currentTab === "dash") return renderDash();
+    if (currentTab === "records") return renderRecords();
   }
 
   /* ---------- 练习：设置 / 出题 / 批改 ---------- */
@@ -237,7 +246,10 @@
 
     view.innerHTML =
       '<div class="card quiz-stage">' +
+      '<div class="quiz-topbar">' +
+      '<button class="icon-btn" data-act="exit">✕ 退出练习</button>' +
       '<div class="quiz-index">第 ' + (i + 1) + " / " + total + " 个</div>" +
+      "</div>" +
       promptHtml +
       '<div class="row" style="justify-content:center;margin-top:18px">' +
       '<button class="btn ghost" data-act="reveal">' + (revealed ? "隐藏答案" : "显示答案") + "</button>" +
@@ -279,8 +291,12 @@
     }).join("");
 
     view.innerHTML =
-      '<div class="card"><div class="section-title">🔍 家长批改</div>' +
-      '<p class="muted">逐词标记对错；错的字点选出来，并选择归因类型。</p></div>' +
+      '<div class="grade-bar">' +
+      '<button class="icon-btn" data-act="back">← 返回</button>' +
+      '<div class="grade-title">🔍 家长批改</div>' +
+      '<button class="icon-btn save" data-act="save">💾 保存</button>' +
+      "</div>" +
+      '<div class="card"><p class="muted">逐词标记对错；错的字点选出来，并选择归因类型。</p></div>' +
       rows +
       '<button class="btn green block" data-act="save" style="margin-top:6px">保存这次练习 💾</button>';
   }
@@ -337,10 +353,33 @@
   }
 
   /* ---------- 错词本 ---------- */
+  function manualFormHtml() {
+    var seg = '<div class="seg" id="mType">' + ATTR_TYPES.map(function (t) {
+      return '<button data-act="mtype" data-k="' + t.key + '" class="' + (manualType === t.key ? "on" : "") + '">' + t.label + "</button>";
+    }).join("") + "</div>";
+    return '<div class="card manual-form">' +
+      '<div class="section-title">✍️ 手动添加错词</div>' +
+      '<p class="muted">把纸面默写拍下来或填进来，直接进错词本，按遗忘曲线复习。</p>' +
+      '<label class="field"><span>词语</span><input id="mw" type="text" placeholder="例如：彩虹" /></label>' +
+      '<label class="field"><span>拼音（用普通 a 即可）</span><input id="mp" type="text" placeholder="例如：cǎi hóng" /></label>' +
+      '<label class="field"><span>错在哪（可选）</span>' + seg + "</label>" +
+      '<label class="field"><span>拍照 / 上传图片（可选）</span>' +
+      '<input type="file" id="mPhoto" accept="image/*" capture="environment" />' +
+      '<div id="mPhotoPrev" class="photo-prev"></div>' +
+      '<div class="hint">照片仅保存在本机，不上传任何云端。</div>' +
+      "</label>" +
+      '<label class="field"><span>备注（可选）</span><input id="mn" type="text" placeholder="例如：和“红”混淆" /></label>' +
+      '<div class="row between">' +
+      '<button class="btn ghost" data-act="cancelmanual">取消</button>' +
+      '<button class="btn primary" data-act="manualsave">保存到错词本</button>' +
+      "</div></div>";
+  }
+
   function renderWrong() {
     var list = aggregateWrong();
     if (!list.length) {
-      view.innerHTML = '<div class="card empty">🎉 还没有错词！<br/>去“去练习”做几次默写吧。</div>';
+      view.innerHTML = '<div class="card empty">🎉 还没有错词！<br/>去“去练习”做几次默写，或点下方手动添加。</div>' +
+        (showManual ? manualFormHtml() : '<button class="btn blue block" data-act="toggelmanual" style="margin-top:10px">➕ 手动添加错词</button>');
       return;
     }
     var due = dueWords().length;
@@ -354,6 +393,7 @@
         '<div class="unit-tag">出错 ' + w.count + " 次 · 最近 " + w.last + stageTxt + "</div>" +
         (reviewMsg ? '<div class="unit-tag review-hint">' + reviewMsg + "</div>" : "") +
         (types ? '<div class="unit-tag">归因：' + types + "</div>" : "") +
+        (photos[w.word] ? '<img class="wb-photo" src="' + photos[w.word] + '" style="display:block;margin-top:6px" />' : "") +
         "</div>" +
         '<div class="row">' +
         '<button class="btn green" style="padding:8px 12px;font-size:14px" data-act="master" data-w="' + esc(w.word) + '">已掌握</button>' +
@@ -361,7 +401,11 @@
         "</div></div>";
     }).join("");
 
+    var manualBtn = '<button class="btn blue block" data-act="toggelmanual" style="margin-bottom:10px">' + (showManual ? "收起 ✕" : "➕ 手动添加错词") + "</button>";
+    var manualForm = showManual ? manualFormHtml() : "";
+
     view.innerHTML =
+      manualBtn + manualForm +
       '<div class="card"><div class="section-title">❌ 错词本（' + list.length + "）</div>" +
       (due ? '<button class="btn green block" data-act="smartreview" style="margin-bottom:10px">🔔 智能复习（今日待复习 ' + due + '）</button>' : "") +
       '<button class="btn blue block" data-act="reviewwrong" style="margin-bottom:10px">🔁 复习所有错词</button>' +
@@ -420,6 +464,41 @@
 
   function stat(num, lbl) { return '<div class="stat"><div class="num">' + num + '</div><div class="lbl">' + lbl + "</div></div>"; }
 
+  /* ---------- 在线练习记录（历史） ---------- */
+  function renderRecords() {
+    if (!records.length) {
+      view.innerHTML = '<div class="card empty">📭 还没有练习记录。<br/>去“去练习”做几次，或手动添加错词，这里就会留下历史。</div>';
+      return;
+    }
+    var sorted = records.slice().sort(function (a, b) { return b.id - a.id; });
+    var html = '<div class="card"><div class="section-title">📒 在线练习记录</div>' +
+      '<p class="muted">共 ' + records.length + ' 次练习，按时间倒序排列。</p></div>';
+    html += sorted.map(function (r) {
+      var total = r.items.length;
+      var correct = r.items.filter(function (it) { return it.correct; }).length;
+      var acc = total ? Math.round(correct / total * 100) : 0;
+      var wrongs = r.items.filter(function (it) { return !it.correct; });
+      var modeLabel = MODE_LABEL[r.mode] || r.mode;
+      var detail = wrongs.length
+        ? wrongs.map(function (it) {
+            var ph = photos[it.word] ? '<img class="rec-photo" src="' + photos[it.word] + '">' : "";
+            var tg = it.type ? '<span class="badge red">' + ATTR_LABEL[it.type] + "</span>" : "";
+            return '<div class="rec-wrong"><span class="rec-word">' + esc(it.word) + '</span>' +
+              ' <span class="pinyin">' + py(it.pinyin) + "</span>" + tg + ph + "</div>";
+          }).join("")
+        : '<div class="rec-wrong"><span class="muted">全部正确，太棒了！🌟</span></div>';
+      return '<div class="card rec">' +
+        '<div class="rec-top"><div><div class="rec-date">' + r.date + '</div><div class="rec-mode">' + modeLabel + '</div></div>' +
+        '<div class="rec-acc"><span class="num">' + acc + '%</span><span class="lbl">正确率</span></div></div>' +
+        '<div class="rec-detail">' + detail +
+        (r.note ? '<div class="rec-note">📝 ' + esc(r.note) + "</div>" : "") +
+        '</div>' +
+        '<div style="padding:0 16px 14px"><button class="del" data-act="delrec" data-id="' + r.id + '">删除这条记录</button></div>' +
+        '</div>';
+    }).join("");
+    view.innerHTML = html;
+  }
+
   function dailyStats(n) {
     var res = [], now = new Date();
     for (var i = n - 1; i >= 0; i--) {
@@ -454,6 +533,32 @@
     var t = e.target.closest("[data-act]");
     if (!t) return;
     var act = t.dataset.act;
+
+    if (act === "exit") { practice = null; setTab("practice"); return; }
+    if (act === "back") { practice.phase = "quiz"; return renderQuiz(); }
+    if (act === "toggelmanual") { showManual = !showManual; if (!showManual) { manualType = null; pendingPhoto = null; } return renderWrong(); }
+    if (act === "cancelmanual") { showManual = false; manualType = null; pendingPhoto = null; return renderWrong(); }
+    if (act === "mtype") {
+      var mk = t.dataset.k;
+      manualType = (manualType === mk) ? null : mk;
+      var mseg = $("#mType");
+      if (mseg) mseg.querySelectorAll("button").forEach(function (b) { b.classList.toggle("on", b.dataset.k === manualType); });
+      return;
+    }
+    if (act === "manualsave") return doManualSave();
+    if (act === "rmphoto") {
+      pendingPhoto = null;
+      var prev = $("#mPhotoPrev"); if (prev) prev.innerHTML = "";
+      var minp = $("#mPhoto"); if (minp) minp.value = "";
+      return;
+    }
+    if (act === "delrec") {
+      var rid = +t.dataset.id;
+      records = records.filter(function (r) { return r.id !== rid; });
+      save(LS.records, records);
+      toast("已删除该记录");
+      return renderRecords();
+    }
 
     if (act === "start") return doStart();
     if (act === "read") return speak(practice.words[practice.idx].word);
@@ -527,6 +632,20 @@
     }
   });
 
+  // 拍照 / 上传图片：压缩后暂存
+  view.addEventListener("change", function (e) {
+    if (e.target && e.target.id === "mPhoto") {
+      var f = e.target.files && e.target.files[0];
+      if (!f) return;
+      compressImage(f, function (d) {
+        if (!d) { toast("图片读取失败"); return; }
+        pendingPhoto = d;
+        var prev = $("#mPhotoPrev");
+        if (prev) prev.innerHTML = '<img class="ph-img" src="' + d + '"><br/><button class="del" data-act="rmphoto" style="margin-top:6px">移除照片</button>';
+      });
+    }
+  });
+
   function blankPractice(mode) {
     return { mode: mode || "tingxie", scope: "all", words: [], idx: 0, phase: "quiz", revealed: {}, results: [] };
   }
@@ -571,8 +690,8 @@
     save(LS.records, records);
     save(LS.review, reviewState);
     practice = null;
-    toast("已保存，错词进入错词本啦！🌟");
-    setTab("wrong");
+    toast("已保存，去「在线练习记录」看看吧！📒");
+    setTab("records");
   }
 
   function doAddWord() {
@@ -585,6 +704,43 @@
     save(LS.custom, customWords);
     toast("已添加：" + word);
     renderBank();
+  }
+
+  /* 拍照上传：压缩到最大 640px 再存为 base64，避免撑爆 localStorage */
+  function compressImage(file, cb) {
+    var fr = new FileReader();
+    fr.onload = function () {
+      var img = new Image();
+      img.onload = function () {
+        var max = 640, w = img.width, h = img.height;
+        if (w > h && w > max) { h = Math.round(h * max / w); w = max; }
+        else if (h > max) { w = Math.round(w * max / h); h = max; }
+        var c = document.createElement("canvas"); c.width = w; c.height = h;
+        var ctx = c.getContext("2d"); ctx.drawImage(img, 0, 0, w, h);
+        try { cb(c.toDataURL("image/jpeg", 0.8)); } catch (e) { cb(null); }
+      };
+      img.onerror = function () { cb(null); };
+      img.src = fr.result;
+    };
+    fr.onerror = function () { cb(null); };
+    fr.readAsDataURL(file);
+  }
+
+  function doManualSave() {
+    var word = $("#mw").value.trim();
+    var pinyin = $("#mp").value.trim();
+    if (!word || !pinyin) { toast("词语和拼音都要填"); return; }
+    var note = $("#mn").value.trim();
+    var type = manualType;
+    records.push({ id: Date.now(), date: today(), mode: "manual", scope: "manual", items: [{ word: word, pinyin: pinyin, correct: false, wrongChars: [], type: type }], note: note });
+    if (pendingPhoto) photos[word] = pendingPhoto;
+    save(LS.records, records);
+    save(LS.photos, photos);
+    if (!reviewState[word]) reviewState[word] = { stage: 0, due: addDays(today(), REVIEW_INTERVALS[0]), lastWrong: today(), lastReview: null, count: 0 };
+    save(LS.review, reviewState);
+    showManual = false; manualType = null; pendingPhoto = null;
+    toast("已加入错词本！🚀");
+    renderWrong();
   }
 
   /* ---------- Toast ---------- */
@@ -602,7 +758,7 @@
   });
 
   /* ---------- 启动 ---------- */
-  var SW_VER = "v2";
+  var SW_VER = "v3";
   if ("serviceWorker" in navigator) {
     window.addEventListener("load", function () {
       navigator.serviceWorker.register("sw.js?v=" + SW_VER).catch(function () {});
