@@ -414,7 +414,7 @@
       '<div class="card"><div class="section-title">❌ 错词本（' + list.length + "）</div>" +
       (due ? '<button class="btn green block" data-act="smartreview" style="margin-bottom:10px">🔔 智能复习（今日待复习 ' + due + '）</button>' : "") +
       '<button class="btn blue block" data-act="reviewwrong" style="margin-bottom:10px">🔁 复习所有错词</button>' +
-      rows + "</div>";
+      '<div class="wb-grid">' + rows + "</div></div>";
   }
 
   /* ---------- 看板 ---------- */
@@ -501,7 +501,7 @@
         '<div style="padding:0 16px 14px"><button class="del" data-act="delrec" data-id="' + r.id + '">删除这条记录</button></div>' +
         '</div>';
     }).join("");
-    view.innerHTML = html;
+    view.innerHTML = '<div class="rec-grid">' + html + "</div>";
   }
 
   function dailyStats(n) {
@@ -771,7 +771,7 @@
   });
 
   /* ---------- 启动 ---------- */
-  var SW_VER = "v4";
+  var SW_VER = "v5";
   if ("serviceWorker" in navigator) {
     window.addEventListener("load", function () {
       navigator.serviceWorker.register("sw.js?v=" + SW_VER).catch(function () {});
