@@ -152,24 +152,15 @@
 
   /* ---------- 渲染：路由 ---------- */
   var view = $("#view");
-  var currentTab = "practice";
+  var modal = $("#modal");
+  var currentTab = "dash";
 
   function setTab(tab) {
     currentTab = tab;
     document.querySelectorAll(".tab").forEach(function (b) {
       b.classList.toggle("active", b.dataset.tab === tab);
     });
-    updateReminderBadge();
     render();
-  }
-
-  function updateReminderBadge() {
-    var n = dueCount();
-    var tab = document.querySelector('.tab[data-tab="practice"]');
-    if (!tab) return;
-    var b = tab.querySelector(".rbadge");
-    if (!b) { b = document.createElement("span"); b.className = "rbadge"; tab.appendChild(b); }
-    if (n > 0) { b.textContent = n; b.style.display = ""; } else { b.style.display = "none"; }
   }
 
   function render() {
@@ -189,14 +180,6 @@
 
   function renderSetup() {
     var due = dueWords();
-    var banner = due.length
-      ? '<div class="reminder">' +
-        '<div class="reminder-ico">🔔</div>' +
-        '<div class="reminder-body"><b>今天有 ' + due.length + ' 个词该复习啦！</b><br/>' +
-        '<span class="muted">按遗忘曲线自动抽词，到期就练，记得最牢。</span></div>' +
-        '<button class="btn green" data-act="smartreview">开始复习 →</button>' +
-        '</div>'
-      : "";
 
     var unitOpts = "";
     for (var u = 1; u <= 8; u++) unitOpts += '<option value="' + u + '">第一单元至第八单元·单元' + u + "</option>";
@@ -211,7 +194,6 @@
       "</div>";
 
     view.innerHTML =
-      banner +
       '<div class="card">' +
       '<div class="section-title">✏️ 新的一次练习</div>' +
       '<p class="muted">孩子纸面默写，家长事后在 APP 里批改、标错字、选归因。</p>' +
@@ -401,8 +383,8 @@
         (photos[w.word] ? '<img class="wb-photo" src="' + photos[w.word] + '" style="display:block;margin-top:6px" />' : "") +
         "</div>" +
         '<div class="row">' +
-        '<button class="btn green" style="padding:8px 12px;font-size:14px" data-act="master" data-w="' + esc(w.word) + '">已掌握</button>' +
-        '<button class="del" data-act="hide" data-w="' + esc(w.word) + '">隐藏</button>' +
+        '<button class="btn danger" style="padding:8px 12px;font-size:14px" data-act="delwrong" data-w="' + esc(w.word) + '" title="彻底删除该错词">🗑️ 删除</button>' +
+        '<button class="del" data-act="hide" data-w="' + esc(w.word) + '" title="暂时隐藏">隐藏</button>' +
         "</div></div>";
     }).join("");
 
@@ -442,32 +424,55 @@
 
     var pie = pieChart(attrTotals());
 
-    var reviewCard = due.length
-      ? '<div class="card review-card"><div class="section-title">🔔 今日复习提醒（' + due.length + '）</div>' +
-        '<p class="muted">按遗忘曲线，这些词今天该复习了，抽空练一练吧：</p>' +
-        due.slice(0, 12).map(function (w) {
-          var st = reviewState[w.word];
-          return '<div class="list-row"><span><span class="list-word">' + esc(w.word) + '</span> <span class="pinyin">' + py(w.pinyin) + "</span></span>" +
-            '<span class="badge ' + (st && st.count ? "green" : "red") + '">第 ' + ((st ? st.count + 1 : 1)) + " 轮</span></div>";
-        }).join("") +
-        '<button class="btn green block" data-act="smartreview" style="margin-top:10px">开始智能复习 →</button></div>'
-      : '<div class="card review-card"><div class="section-title">🔔 复习提醒</div><p class="muted">今天没有待复习的词，雨锡记得很牢！🌟</p></div>';
-
     view.innerHTML =
       '<div class="stat-grid">' +
       stat(records.length, "练习次数") +
       stat(totalItems, "累计默写词数") +
       stat(acc + "%", "总正确率") +
-      stat(masteredCount, "已掌握错词") +
-      stat(due.length, "今日待复习") +
+      stat(masteredCount, "已掌握错词", masteredCount ? "show-mastered" : null) +
+      stat(due.length, "今日待复习", due.length ? "show-due" : null) +
       "</div>" +
-      reviewCard +
       '<div class="card"><div class="section-title">📈 近 14 天正确率</div><div class="bar-chart">' + bars + "</div></div>" +
       '<div class="card"><div class="section-title">🔝 高频错词 Top</div>' + topHtml + "</div>" +
       '<div class="card"><div class="section-title">🧩 错字归因分布</div>' + pie + "</div>";
   }
 
-  function stat(num, lbl) { return '<div class="stat"><div class="num">' + num + '</div><div class="lbl">' + lbl + "</div></div>"; }
+  function stat(num, lbl, act) {
+    var cls = "stat" + (act ? " clickable" : "");
+    var attr = act ? ' data-act="' + act + '"' : "";
+    return '<div class="' + cls + '"' + attr + '><div class="num">' + num + '</div><div class="lbl">' + lbl + (act ? " →" : "") + "</div></div>";
+  }
+
+  // 查某个词的拼音（来自词库或历史记录）
+  function pinyinOf(word) {
+    var found = allWords().filter(function (w) { return w.word === word; })[0];
+    if (found && found.pinyin) return found.pinyin;
+    for (var i = 0; i < records.length; i++) {
+      for (var j = 0; j < records[i].items.length; j++) {
+        if (records[i].items[j].word === word && records[i].items[j].pinyin) return records[i].items[j].pinyin;
+      }
+    }
+    return "";
+  }
+
+  // 词语卡片弹层
+  function openWordModal(title, words, footerHtml) {
+    $("#modalTitle").textContent = title;
+    var body = words.map(function (w) {
+      var info = "";
+      if (mastered[w.word]) info = '<span class="badge green">⭐ 已掌握</span>';
+      else {
+        var st = reviewState[w.word];
+        if (st) info = st.due <= today()
+          ? '<span class="badge red">今天复习</span>'
+          : '<span class="badge">' + (st.count ? "已复习 " + st.count + " 次" : "第 1 轮") + "</span>";
+      }
+      return '<div class="wcard"><div><span class="w-main">' + esc(w.word) + "</span> " + pySpan(w.pinyin) + "</div>" + info + "</div>";
+    }).join("");
+    $("#modalBody").innerHTML = body + (footerHtml || "");
+    modal.classList.remove("hidden");
+  }
+  function closeModal() { modal.classList.add("hidden"); }
 
   /* ---------- 在线练习记录（历史） ---------- */
   function renderRecords() {
@@ -604,6 +609,18 @@
     }
     if (act === "save") return doSave();
 
+    if (act === "show-due") {
+      openWordModal("🔔 今日待复习（" + dueWords().length + "）", dueWords(),
+        '<button class="btn green block" data-act="modal-start-review" style="margin-top:6px">开始智能复习 →</button>');
+      return;
+    }
+    if (act === "show-mastered") {
+      var mw = Object.keys(mastered).filter(function (k) { return mastered[k]; })
+        .map(function (k) { return { word: k, pinyin: pinyinOf(k) }; });
+      openWordModal("⭐ 已掌握错词（" + mw.length + "）", mw);
+      return;
+    }
+
     if (act === "addword") return doAddWord();
     if (act === "delword") {
       var wname = t.dataset.w;
@@ -611,7 +628,19 @@
       save(LS.custom, customWords); toast("已删除"); return renderBank();
     }
 
-    if (act === "master") { mastered[t.dataset.w] = true; save(LS.mastered, mastered); delete reviewState[t.dataset.w]; save(LS.review, reviewState); toast("太棒了，已掌握！🌟"); return renderWrong(); }
+    if (act === "delwrong") {
+      var dw2 = t.dataset.w;
+      if (!confirm("确定要彻底删除错词「" + dw2 + "」吗？\n该词会从错词本和练习记录里一并移除，且不可恢复。")) return;
+      records.forEach(function (r) { r.items = r.items.filter(function (it) { return it.word !== dw2; }); });
+      records = records.filter(function (r) { return r.items.length > 0; });
+      save(LS.records, records);
+      delete mastered[dw2]; save(LS.mastered, mastered);
+      delete hidden[dw2]; save(LS.hidden, hidden);
+      delete reviewState[dw2]; save(LS.review, reviewState);
+      delete photos[dw2]; save(LS.photos, photos);
+      toast("已删除错词：" + dw2);
+      return renderWrong();
+    }
     if (act === "hide") { hidden[t.dataset.w] = true; save(LS.hidden, hidden); delete reviewState[t.dataset.w]; save(LS.review, reviewState); toast("已隐藏"); return renderWrong(); }
     if (act === "smartreview") {
       var dw = dueWords();
@@ -659,6 +688,22 @@
     }
   });
 
+  /* ---------- 弹层交互 ---------- */
+  modal.addEventListener("click", function (e) {
+    if (e.target === modal) { closeModal(); return; }
+    var b = e.target.closest("[data-act]");
+    if (!b) return;
+    var a = b.dataset.act;
+    if (a === "closemodal") { closeModal(); return; }
+    if (a === "modal-start-review") {
+      closeModal();
+      var dw = dueWords();
+      if (!dw.length) { toast("今天没有待复习的词，雨锡真棒！🌟"); return; }
+      practice = { mode: "tingxie", scope: "review", words: dw.map(function (w) { return { word: w.word, pinyin: w.pinyin }; }), idx: 0, phase: "quiz", revealed: {}, results: [] };
+      renderQuiz();
+    }
+  });
+
   function blankPractice(mode) {
     return { mode: mode || "tingxie", scope: "all", words: [], idx: 0, phase: "quiz", revealed: {}, results: [] };
   }
@@ -691,6 +736,10 @@
           st.lastReview = today();
           st.due = addDays(today(), REVIEW_INTERVALS[st.stage]);
           st.count++;
+          if (st.stage === REVIEW_MAX_STAGE) { // 走完整个间隔周期 → 视为已掌握
+            mastered[w.word] = true; save(LS.mastered, mastered);
+            delete reviewState[w.word]; save(LS.review, reviewState);
+          }
         }
       } else {
         if (!st) st = reviewState[w.word] = { stage: 0, due: addDays(today(), REVIEW_INTERVALS[0]), lastWrong: today(), lastReview: null, count: 0 };
@@ -771,7 +820,7 @@
   });
 
   /* ---------- 启动 ---------- */
-  var SW_VER = "v5";
+  var SW_VER = "v6";
   if ("serviceWorker" in navigator) {
     window.addEventListener("load", function () {
       navigator.serviceWorker.register("sw.js?v=" + SW_VER).catch(function () {});
@@ -783,5 +832,5 @@
       location.reload();
     });
   }
-  setTab("practice");
+  setTab("dash");
 })();
