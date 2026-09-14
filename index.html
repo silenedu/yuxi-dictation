@@ -22,14 +22,24 @@
   </header>
 
   <nav class="tab-bar" id="tabBar">
-    <button class="tab active" data-tab="practice">✏️ 去练习</button>
+    <button class="tab active" data-tab="dash">📊 看板</button>
+    <button class="tab" data-tab="practice">✏️ 去练习</button>
     <button class="tab" data-tab="bank">📚 词语库</button>
     <button class="tab" data-tab="wrong">❌ 错词本</button>
-    <button class="tab" data-tab="dash">📊 看板</button>
     <button class="tab" data-tab="records">📒 记录</button>
   </nav>
 
   <main id="view" class="view"></main>
+
+  <div id="modal" class="modal hidden">
+    <div class="modal-box">
+      <div class="modal-head">
+        <span id="modalTitle"></span>
+        <button class="icon-btn" data-act="closemodal" style="background:rgba(255,255,255,.22);color:#fff">✕</button>
+      </div>
+      <div id="modalBody" class="modal-body"></div>
+    </div>
+  </div>
 
   <div id="toast" class="toast"></div>
 
