@@ -109,7 +109,7 @@ window.ATTR_TYPES = [
   { key: "tone_same", label: "同音字混淆" },
   { key: "shape_same", label: "形近字混淆" },
   { key: "stroke", label: "笔画笔顺错" },
-  { key: "radical", label: "偏旁部首错" },
+  { key: "pinyin", label: "拼音错" },
   { key: "unknown", label: "完全不会" }
 ];
 
