@@ -3,28 +3,31 @@
   --bg2: #F4F8FF;
   --card: #FFFFFF;
   --primary: #1E63D6;
-  --primary-d: #1648A6;
+  --primary-d: #143C8C;
   --primary-l: #E8F0FE;
   --accent: #FFC83D;
   --orange: #FF7A45;
   --blue: #2E8BFF;
   --cyan: #19C3D6;
-  --green: #22B573;
+  --green: #1FB873;
   --red: #FF5A5F;
-  --text: #1F2A44;
-  --muted: #7A89A8;
-  --line: #E2EAF6;
-  --shadow: 0 8px 22px rgba(30, 99, 214, 0.14);
+  --text: #1B2540;
+  --muted: #6B7A9C;
+  --line: #E4ECF8;
+  --shadow: 0 10px 26px rgba(28, 62, 140, 0.12);
+  --radius: 20px;
 }
 
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+@keyframes fadeUp { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+@keyframes pop { from { opacity: 0; transform: scale(.96); } to { opacity: 1; transform: none; } }
 
 html, body {
   margin: 0; padding: 0;
   background:
-    radial-gradient(circle at 12% 8%, rgba(46, 139, 255, 0.10), transparent 42%),
-    radial-gradient(circle at 90% 3%, rgba(255, 200, 61, 0.18), transparent 40%),
-    radial-gradient(circle at 80% 60%, rgba(25, 195, 214, 0.08), transparent 45%),
+    radial-gradient(circle at 10% 6%, rgba(46, 139, 255, 0.10), transparent 40%),
+    radial-gradient(circle at 92% 2%, rgba(255, 200, 61, 0.16), transparent 38%),
+    radial-gradient(circle at 85% 55%, rgba(25, 195, 214, 0.07), transparent 42%),
     var(--bg);
   background-attachment: fixed;
   color: var(--text);
@@ -33,25 +36,25 @@ html, body {
   line-height: 1.55;
 }
 
-/* ---------- Header (火箭探险横幅) ---------- */
+/* ---------- Header（无火箭，简洁男孩感） ---------- */
 .app-header {
   position: relative;
-  display: flex; align-items: center; gap: 12px;
-  padding: 18px 18px 16px;
-  background: linear-gradient(120deg, #1E63D6 0%, #2E8BFF 55%, #19C3D6 100%);
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 20px 20px 18px;
+  background: linear-gradient(120deg, #1E63D6 0%, #2E8BFF 58%, #19C3D6 100%);
   color: #fff;
-  border-radius: 0 0 26px 26px;
-  box-shadow: 0 8px 20px rgba(30, 99, 214, 0.28);
-  overflow: hidden;
+  border-radius: 0 0 30px 30px;
+  box-shadow: 0 8px 22px rgba(28, 62, 140, 0.28);
 }
-.app-header .logo { font-size: 38px; filter: drop-shadow(0 2px 4px rgba(0,0,0,.2)); }
-.app-header h1 { margin: 0; font-size: 24px; font-weight: 800; letter-spacing: 1px; }
-.app-header .subtitle { margin: 0; font-size: 13px; opacity: 0.92; }
-.app-header .header-orb {
-  position: absolute; right: -26px; top: -26px;
-  width: 110px; height: 110px; border-radius: 50%;
-  background: radial-gradient(circle at 35% 35%, rgba(255,255,255,.55), rgba(255,255,255,0) 60%);
-  pointer-events: none;
+.app-header h1 { margin: 0; font-size: 23px; font-weight: 800; letter-spacing: 1px; }
+.app-header .subtitle { margin: 2px 0 0; font-size: 13px; opacity: 0.9; }
+.app-header .header-badge {
+  width: 46px; height: 46px; border-radius: 50%;
+  background: rgba(255, 255, 255, 0.22);
+  border: 2px solid rgba(255, 255, 255, 0.55);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 24px; font-weight: 800; color: #fff;
+  flex: 0 0 auto;
 }
 
 /* ---------- Bottom tab bar ---------- */
@@ -59,21 +62,23 @@ html, body {
   position: fixed; bottom: 0; left: 0; right: 0;
   display: flex; background: #fff;
   border-top: 1px solid var(--line);
-  box-shadow: 0 -4px 16px rgba(30, 99, 214, 0.10);
+  box-shadow: 0 -4px 18px rgba(28, 62, 140, 0.10);
   z-index: 20;
+  padding: 2px 0 calc(2px + env(safe-area-inset-bottom));
 }
 .tab {
   flex: 1; position: relative; border: none; background: transparent;
-  padding: 9px 2px 12px; font-size: 12.5px; font-family: inherit;
+  padding: 8px 2px 10px; font-size: 12px; font-family: inherit;
   color: var(--muted); cursor: pointer; line-height: 1.25;
+  display: flex; flex-direction: column; align-items: center; gap: 2px;
 }
 .tab.active { color: var(--primary-d); font-weight: 800; }
 .tab.active::after {
-  content: ""; display: block; width: 26px; height: 4px;
-  background: var(--primary); border-radius: 3px; margin: 4px auto 0;
+  content: ""; display: block; width: 24px; height: 4px;
+  background: var(--primary); border-radius: 3px; margin-top: 3px;
 }
 .rbadge {
-  position: absolute; top: 2px; right: 12%;
+  position: absolute; top: 0; right: 22%;
   min-width: 18px; height: 18px; padding: 0 5px;
   border-radius: 999px; background: var(--red); color: #fff;
   font-size: 11px; font-weight: 800;
@@ -81,11 +86,11 @@ html, body {
 }
 
 /* ---------- Layout ---------- */
-.view { padding: 14px 16px 96px; max-width: 720px; margin: 0 auto; }
-
+.view { padding: 14px 16px 104px; max-width: 720px; margin: 0 auto; }
 .card {
-  background: var(--card); border-radius: 20px; padding: 16px;
+  background: var(--card); border-radius: var(--radius); padding: 16px;
   box-shadow: var(--shadow); margin-bottom: 14px;
+  animation: fadeUp .28s ease both;
 }
 .section-title { font-size: 18px; font-weight: 800; margin: 4px 0 12px; color: var(--text); }
 .muted { color: var(--muted); font-size: 14px; }
@@ -96,7 +101,7 @@ html, body {
   border: none; border-radius: 14px; padding: 12px 16px;
   font-size: 17px; font-family: inherit; font-weight: 800; cursor: pointer;
   background: var(--line); color: var(--text); min-height: 48px;
-  transition: transform .12s ease, box-shadow .12s ease, filter .12s ease;
+  transition: transform .12s ease, filter .12s ease;
 }
 .btn.primary { background: var(--primary); color: #fff; }
 .btn.blue { background: var(--blue); color: #fff; }
@@ -108,7 +113,6 @@ html, body {
 .btn:disabled { opacity: 0.45; cursor: not-allowed; }
 
 .row { display: flex; gap: 10px; flex-wrap: wrap; }
-.row.end { justify-content: flex-end; }
 .row.between { justify-content: space-between; align-items: center; }
 
 .icon-btn {
@@ -134,28 +138,32 @@ html, body {
 
 /* ---------- Typography bits ---------- */
 .pinyin { font-size: 17px; color: var(--blue); letter-spacing: 1px; }
-.big-word { font-size: 52px; font-weight: 800; color: var(--text); letter-spacing: 4px; }
+.big-word { font-size: 52px; font-weight: 800; color: var(--text); letter-spacing: 4px; animation: pop .3s ease; }
 .big-pinyin { font-size: 30px; color: var(--blue); letter-spacing: 2px; font-weight: 700; }
 
 .seg { display: flex; background: var(--line); border-radius: 12px; padding: 4px; gap: 4px; }
 .seg button {
   flex: 1; border: none; background: transparent; border-radius: 9px;
   padding: 10px 6px; font-size: 14px; font-family: inherit; color: var(--muted); cursor: pointer;
+  transition: background .15s ease, color .15s ease;
 }
 .seg button.on { background: #fff; color: var(--primary-d); font-weight: 800; box-shadow: var(--shadow); }
 
-label.field { display: block; margin: 12px 0; }
+label.field { display: block; margin: 14px 0; }
+.field-label { display: block; font-size: 14px; color: var(--muted); margin-bottom: 6px; font-weight: 600; }
 label.field > span { display: block; font-size: 14px; color: var(--muted); margin-bottom: 6px; font-weight: 600; }
-select, input[type="text"], input[type="number"], input[type="file"] {
+select, input[type="text"], input[type="number"], textarea {
   width: 100%; padding: 12px; font-size: 17px; font-family: inherit;
   border: 2px solid var(--line); border-radius: 12px; background: #fff; color: var(--text);
 }
-input:focus, select:focus { outline: none; border-color: var(--primary); }
+input:focus, select:focus, textarea:focus { outline: none; border-color: var(--primary); }
 
 /* ---------- Quiz ---------- */
-.quiz-stage { text-align: center; padding: 18px 12px; }
-.quiz-topbar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
+.quiz-stage { text-align: center; padding: 18px 14px; }
+.quiz-topbar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
 .quiz-index { font-size: 14px; color: var(--muted); font-weight: 700; }
+.prog { height: 8px; background: var(--line); border-radius: 999px; overflow: hidden; margin-bottom: 16px; }
+.prog-fill { height: 100%; background: linear-gradient(90deg, var(--primary), var(--cyan)); border-radius: 999px; transition: width .3s ease; }
 .read-btn { font-size: 16px; }
 
 /* ---------- Wrong-char selector ---------- */
@@ -164,7 +172,9 @@ input:focus, select:focus { outline: none; border-color: var(--primary); }
   width: 56px; height: 64px; border-radius: 12px; border: 2px solid var(--line);
   display: flex; align-items: center; justify-content: center; font-size: 30px;
   background: #fff; cursor: pointer; font-weight: 700;
+  transition: transform .1s ease;
 }
+.char-cell:active { transform: scale(0.94); }
 .char-cell.on { background: var(--red); border-color: var(--red); color: #fff; }
 
 /* ---------- Review / grading ---------- */
@@ -176,7 +186,7 @@ input:focus, select:focus { outline: none; border-color: var(--primary); }
   box-shadow: var(--shadow);
 }
 .grade-title { font-size: 16px; font-weight: 800; color: var(--primary-d); }
-.review-item { border: 2px solid var(--line); border-radius: 16px; padding: 14px; margin-bottom: 12px; }
+.review-item { border: 2px solid var(--line); border-radius: 16px; padding: 14px; margin-bottom: 12px; animation: fadeUp .25s ease both; }
 .review-item.wrong { border-color: var(--red); }
 .review-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
 .judge { display: flex; gap: 8px; }
@@ -188,20 +198,20 @@ input:focus, select:focus { outline: none; border-color: var(--primary); }
 .wb-item { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 12px; border-bottom: 1px solid var(--line); }
 .wb-item:last-child { border-bottom: none; }
 .wb-word { font-size: 22px; font-weight: 800; }
-.wb-photo { width: 46px; height: 46px; border-radius: 10px; object-fit: cover; border: 2px solid var(--line); }
+.wb-photo { width: 48px; height: 48px; border-radius: 10px; object-fit: cover; border: 2px solid var(--line); }
 .badge { font-size: 12px; padding: 3px 8px; border-radius: 999px; background: var(--line); color: var(--muted); font-weight: 700; }
 .badge.red { background: #FFE7E7; color: var(--red); }
 .badge.green { background: #E3F6EC; color: var(--green); }
 
 /* ---------- Dashboard ---------- */
 .stat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-.stat { background: var(--card); border-radius: 16px; padding: 14px; box-shadow: var(--shadow); text-align: center; }
+.stat { background: var(--card); border-radius: 16px; padding: 14px; box-shadow: var(--shadow); text-align: center; animation: fadeUp .28s ease both; }
 .stat .num { font-size: 30px; font-weight: 800; color: var(--primary-d); }
 .stat .lbl { font-size: 13px; color: var(--muted); }
 
 .bar-chart { display: flex; align-items: flex-end; gap: 4px; height: 140px; padding-top: 10px; }
 .bar-col { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; height: 100%; }
-.bar { width: 70%; background: var(--blue); border-radius: 6px 6px 0 0; min-height: 2px; }
+.bar { width: 70%; background: var(--blue); border-radius: 6px 6px 0 0; min-height: 2px; transition: height .4s ease; }
 .bar.zero { background: var(--line); }
 .bar-label { font-size: 10px; color: var(--muted); margin-top: 4px; }
 
@@ -224,7 +234,7 @@ input:focus, select:focus { outline: none; border-color: var(--primary); }
 .manual-form .hint { font-size: 12px; color: var(--muted); margin-top: 4px; }
 
 /* ---------- Records (在线练习记录) ---------- */
-.rec { padding: 0; overflow: hidden; }
+.rec { padding: 0; overflow: hidden; animation: fadeUp .26s ease both; }
 .rec-top {
   display: flex; justify-content: space-between; align-items: center;
   padding: 14px 16px; background: linear-gradient(120deg, var(--primary-l), #EAF6FF);
@@ -244,7 +254,7 @@ input:focus, select:focus { outline: none; border-color: var(--primary); }
 /* ---------- Toast ---------- */
 .toast {
   position: fixed; left: 50%; bottom: 92px; transform: translateX(-50%);
-  background: rgba(31, 42, 68, 0.94); color: #fff; padding: 10px 18px; border-radius: 999px;
+  background: rgba(27, 37, 64, 0.94); color: #fff; padding: 10px 18px; border-radius: 999px;
   font-size: 15px; opacity: 0; pointer-events: none; transition: opacity .25s; z-index: 50; font-weight: 600;
 }
 .toast.show { opacity: 1; }
