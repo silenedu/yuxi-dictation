@@ -1,4 +1,4 @@
-const CACHE = "yuxi-dictation-v2";
+const CACHE = "yuxi-dictation-v3";
 const ASSETS = [
   ".",
   "index.html",
@@ -37,33 +37,27 @@ self.addEventListener("activate", function (e) {
   );
 });
 
+// 网络优先：在线时始终取最新文件（保证更新即时生效），离线时回退缓存。
+// 这样不会再出现「HTML 已更新、CSS/JS 仍是旧缓存」的部分更新问题。
 self.addEventListener("fetch", function (e) {
   if (e.request.method !== "GET") return;
   var url;
   try { url = new URL(e.request.url); } catch (err) { return; }
   if (url.origin !== self.location.origin) return;
 
-  if (isHtml(e.request)) {
-    e.respondWith(
-      fetch(e.request).then(function (res) {
-        var copy = res.clone();
-        caches.open(CACHE).then(function (c) { c.put(e.request, copy); });
-        return res;
-      }).catch(function () {
-        return caches.match(e.request).then(function (h) { return h || caches.match("index.html"); });
-      })
-    );
-    return;
-  }
-
   e.respondWith(
-    caches.match(e.request).then(function (hit) {
-      if (hit) return hit;
-      return fetch(e.request).then(function (res) {
+    fetch(e.request).then(function (res) {
+      if (res && res.status === 200 && res.type === "basic") {
         var copy = res.clone();
         caches.open(CACHE).then(function (c) { c.put(e.request, copy); });
-        return res;
-      }).catch(function () { return hit; });
+      }
+      return res;
+    }).catch(function () {
+      return caches.match(e.request).then(function (h) {
+        if (h) return h;
+        if (isHtml(e.request)) return caches.match("index.html");
+        return new Response("", { status: 504, statusText: "offline" });
+      });
     })
   );
 });
