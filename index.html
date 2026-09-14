@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta name="theme-color" content="#FF8A65" />
+  <title>雨锡的默写本</title>
+  <link rel="manifest" href="manifest.webmanifest" />
+  <link rel="apple-touch-icon" href="icons/icon-192.png" />
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+  <header class="app-header">
+    <div class="logo">🌟</div>
+    <div class="title-block">
+      <h1>雨锡的默写本</h1>
+      <p class="subtitle">上海二年级 · 语文词语默写小助手</p>
+    </div>
+  </header>
+
+  <nav class="tab-bar" id="tabBar">
+    <button class="tab active" data-tab="practice">✏️ 去练习</button>
+    <button class="tab" data-tab="bank">📚 词语库</button>
+    <button class="tab" data-tab="wrong">❌ 错词本</button>
+    <button class="tab" data-tab="dash">📊 看板</button>
+  </nav>
+
+  <main id="view" class="view"></main>
+
+  <div id="toast" class="toast"></div>
+
+  <script src="js/data.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
