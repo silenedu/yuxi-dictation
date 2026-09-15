@@ -46,7 +46,7 @@
   <script>
     (function () {
       if (!("serviceWorker" in navigator)) return;
-      var SW_VER = "v8";
+      var SW_VER = "v9";
       window.addEventListener("load", function () {
         navigator.serviceWorker.register("sw.js?v=" + SW_VER).catch(function () {});
       });
