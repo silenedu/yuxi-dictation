@@ -86,13 +86,13 @@
       return pool[0];
     } catch (e) { return null; }
   }
-  function speak(text) {
+  function speak(text, rate) {
     if (!("speechSynthesis" in window) || !text) return;
     try {
       if (!_voiceReady) { _voice = pickVoice(); _voiceReady = true; }
       window.speechSynthesis.cancel();
       var u = new SpeechSynthesisUtterance(text);
-      u.lang = "zh-CN"; u.rate = 0.92; u.pitch = 1.06; u.volume = 1; // 稍慢、微扬，更清晰有感情
+      u.lang = "zh-CN"; u.rate = rate || 0.92; u.pitch = 1.06; u.volume = 1; // 默认稍慢微扬；报笔画名时更慢更清晰
       if (_voice) u.voice = _voice;
       window.speechSynthesis.speak(u);
     } catch (e) {}
@@ -194,6 +194,7 @@
   var view = $("#view");
   var modal = $("#modal");
   var currentTab = "dash";
+  var tabBeforePractice = "practice"; // 进入练习前所在的 tab，退出练习时回到这里
 
   function setTab(tab) {
     currentTab = tab;
@@ -259,7 +260,7 @@
       '<button class="btn primary block" data-act="start">开始练习 →</button>' +
       "</div>";
   }
-  // 看词写拼音 → 四选一：1 个正确拼音 + 3 个“易混淆”拼音（同音节不同声调、同声母/同韵母优先）
+  // 看词写拼音 · 四选一：干扰项按「一年级拼音易错点」从正确答案直接变换生成
   function toneless(s) {
     return String(s).normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/\s+/g, "").toLowerCase();
   }
@@ -271,7 +272,7 @@
     }
     return { ini: "", fin: s };
   }
-  // 拼音相近度：同音节(声调不同)＋声母/韵母相同 计分，越接近分越高
+  // 拼音相近度：同音节(声调不同)＋声母/韵母相同 计分，越接近分越高（干扰项不够时兜底用）
   function pinyinSim(a, b) {
     var as = a.split(" "), bs = b.split(" "), total = 0;
     for (var i = 0; i < as.length; i++) {
@@ -286,18 +287,81 @@
     }
     return total;
   }
+
+  // ---- 拼音音节拆装（声调/ü 处理）----
+  var TONE_MARK = { "\u0304": 1, "\u0301": 2, "\u030C": 3, "\u0300": 4 };
+  function sylParse(s) { // "xuě" -> {base:"xue", tone:3}；ü 记作 v
+    var n = String(s).normalize("NFD"), tone = 0, base = "";
+    for (var i = 0; i < n.length; i++) {
+      var c = n[i];
+      if (TONE_MARK[c]) { tone = TONE_MARK[c]; continue; }
+      if (c === "\u0308") { base = base.replace(/u$/, "v"); continue; } // ü 记作 v（NFD 中两点挂在 u 后）
+      base += c;
+    }
+    return { base: base, tone: tone };
+  }
+  function sylBuild(p) { // {base:"xue", tone:3} -> "xuě"（按标调规则落调号；ü 先落调再展开，避免组合顺序错乱）
+    var mk = ["", "\u0304", "\u0301", "\u030C", "\u0300"][p.tone] || "";
+    var b = p.base;
+    if (!mk) return b.replace(/v/g, "u\u0308").normalize("NFC");
+    var idx = -1;
+    if (b.indexOf("a") >= 0) idx = b.indexOf("a");
+    else if (b.indexOf("o") >= 0) idx = b.indexOf("o");
+    else if (b.indexOf("e") >= 0) idx = b.indexOf("e");
+    else { for (var i = b.length - 1; i >= 0; i--) if ("iuv".indexOf(b[i]) >= 0) { idx = i; break; } }
+    var out2;
+    if (idx < 0) out2 = b + mk;
+    else out2 = b.slice(0, idx + 1) + mk + b.slice(idx + 1);
+    return out2.replace(/v/g, "u\u0308").normalize("NFC");
+  }
+
+  // ---- 一年级拼音易错点 ----
+  var ZCS = { zh: "z", z: "zh", ch: "c", c: "ch", sh: "s", s: "sh" };                 // 平翘舌不分
+  var CONF = { b: ["d", "p"], d: ["b", "t"], t: ["d"], p: ["b", "q"], q: ["p"], n: ["l"], l: ["n"] }; // 形近声母看反
+  var NASAL = { in: "ing", ing: "in", en: "eng", eng: "en", an: "ang", ang: "an" };  // 前后鼻音
+  function sylVariants(base) { // 单音节的结构性易错变换（不含声调）
+    var outs = [], pr = parseSyl(base), ini = pr.ini, fin = pr.fin;
+    function push(nb) { if (nb && outs.indexOf(nb) < 0) outs.push(nb); }
+    if (ZCS[ini]) push(base.replace(ini, ZCS[ini]));                                     // 平翘舌
+    (CONF[ini] || []).forEach(function (x) { push(base.replace(ini, x)); });             // d/t、b/p 等
+    Object.keys(NASAL).forEach(function (k) {                                            // 前后鼻音
+      if (fin.slice(-k.length) === k) push(base.slice(0, base.length - k.length) + NASAL[k]);
+    });
+    // u 上两点加不加（j q x y l n + u）
+    if (/^[jqxyln]$/.test(ini) && fin.indexOf("u") === 0) push(base.slice(0, ini.length) + "v" + fin.slice(1));
+    return outs;
+  }
+  function pinyinConfusions(tp) { // 整词易错干扰项：结构变换优先，声调变换其次
+    var syls = tp.split(" "), struct = [], tones = [];
+    function add(list, cand) { if (cand && cand !== tp && list.indexOf(cand) < 0) list.push(cand); }
+    syls.forEach(function (s, si) {
+      var p = sylParse(s);
+      sylVariants(p.base).forEach(function (nb) {
+        var cand = syls.slice(); cand[si] = sylBuild({ base: nb, tone: p.tone });
+        add(struct, cand.join(" "));
+      });
+    });
+    syls.forEach(function (s, si) { // 声调标错
+      var p = sylParse(s);
+      if (!p.tone) return;
+      [1, 2, 3, 4].forEach(function (t) {
+        if (t === p.tone) return;
+        var cand = syls.slice(); cand[si] = sylBuild({ base: p.base, tone: t });
+        add(tones, cand.join(" "));
+      });
+    });
+    return struct.concat(tones);
+  }
   function buildMcq(target) {
     var tp = target.pinyin;
-    var pool = allWords().filter(function (x) { return x.pinyin !== tp; });
-    var scored = pool.map(function (x) { return { p: x.pinyin, score: pinyinSim(tp, x.pinyin) }; });
-    scored.sort(function (m, n) { return n.score - m.score; });
-    var picks = [];
-    for (var k = 0; k < scored.length && picks.length < 3; k++) {
-      if (picks.indexOf(scored[k].p) < 0) picks.push(scored[k].p);
-    }
-    while (picks.length < 3) {
-      var r = pool[Math.floor(Math.random() * pool.length)];
-      if (r && picks.indexOf(r.pinyin) < 0 && r.pinyin !== tp) picks.push(r.pinyin);
+    var picks = shuffle(pinyinConfusions(tp)).slice(0, 3); // 易错变换优先
+    if (picks.length < 3) { // 不足再按“拼音相近”从词库补
+      var pool = allWords().filter(function (x) { return x.pinyin !== tp; });
+      var scored = pool.map(function (x) { return { p: x.pinyin, score: pinyinSim(tp, x.pinyin) }; });
+      scored.sort(function (m, n) { return n.score - m.score; });
+      for (var k = 0; k < scored.length && picks.length < 3; k++) {
+        if (picks.indexOf(scored[k].p) < 0) picks.push(scored[k].p);
+      }
     }
     return shuffle([tp].concat(picks));
   }
@@ -320,8 +384,8 @@
       promptHtml =
         '<div class="big-pinyin">' + py(w.pinyin) + "</div>" +
         (revealed ? '<div class="big-word">' + esc(w.word) + "</div>" : '<p class="muted">孩子看拼音写词语，写完后点“显示词语”核对。</p>');
-    } else {
-      // 看词写拼音 → 四选一（4 个易混淆拼音）
+    } else if (practice.mode === "word2pin" && practice.form === "online") {
+      // 看词写拼音 · 在线作答 → 四选一（4 个按一年级易错点生成的混淆拼音）
       if (!practice._mcq) practice._mcq = {};
       if (!practice._mcq[i]) practice._mcq[i] = { options: buildMcq(w), answer: w.pinyin, chosen: null, correct: null };
       var mc = practice._mcq[i];
@@ -334,6 +398,12 @@
         '<div class="muted" style="margin:8px 0 6px">选出发音正确的拼音：</div>' +
         '<div class="mcq-grid">' + optsHtml + "</div>" +
         (mc.chosen ? (mc.correct ? '<p class="ok-tip">✅ 答对啦！</p>' : '<p class="bad-tip">❌ 正确答案是：' + py(mc.answer) + "</p>") : "");
+    } else {
+      // 看词写拼音 · 本子作答 → 与其他本子模式一致：看词写在本子上，家长批改
+      promptHtml =
+        '<div class="big-word">' + esc(w.word) + "</div>" +
+        (revealed ? '<div class="big-pinyin">' + py(w.pinyin) + "</div>"
+          : '<p class="muted">孩子看词语，在练习本上写出拼音；写完后点“显示拼音”核对。</p>');
     }
 
     var pct = Math.round((i + 1) / total * 100);
@@ -348,7 +418,7 @@
       '<div class="prog"><div class="prog-fill" style="width:' + pct + '%"></div></div>' +
       "</div>" +
       promptHtml +
-      (practice.mode === "word2pin" ? "" :
+      ((practice.mode === "word2pin" && practice.form === "online") ? "" :
         '<div class="row" style="justify-content:center;margin-top:18px">' +
         '<button class="btn ghost" data-act="reveal">' + (revealed ? "隐藏答案" : "显示答案") + "</button></div>") +
       "</div>" +
@@ -499,7 +569,7 @@
       var reviewMsg = reviewInfo(w.word);
       var isMastered = !!mastered[w.word];
       return '<div class="wb-item">' +
-        '<div><span class="wb-word">' + esc(w.word) + '</span> <span class="pinyin">' + py(w.pinyin) + "</span>" +
+        '<div><span class="wb-word clickable" data-act="wstroke" data-w="' + esc(w.word) + '" data-p="' + esc(w.pinyin) + '" title="点我看笔顺田字格">' + esc(w.word) + '</span> <span class="pinyin">' + py(w.pinyin) + "</span>" +
         '<div class="unit-tag">出错 ' + w.count + " 次 · 最近 " + w.last + stageTxt + "</div>" +
         (reviewMsg ? '<div class="unit-tag review-hint">' + reviewMsg + "</div>" : "") +
         (isMastered ? '<div class="unit-tag" style="color:var(--green);font-weight:700">⭐ 已掌握（练习时自动跳过）</div>' : "") +
@@ -659,7 +729,7 @@
     if (!t) return;
     var act = t.dataset.act;
 
-    if (act === "exit") { practice = null; setTab("practice"); return; }
+    if (act === "exit") { practice = null; setTab(tabBeforePractice || "practice"); return; }
     if (act === "back") { practice.phase = "quiz"; return renderQuiz(); }
     if (act === "toggelmanual") { showManual = !showManual; if (!showManual) { manualType = null; pendingPhoto = null; } return renderWrong(); }
     if (act === "cancelmanual") { showManual = false; manualType = null; pendingPhoto = null; return renderWrong(); }
@@ -696,16 +766,18 @@
     if (act === "start") return doStart();
     if (act === "read") return speak(practice.words[practice.idx].word);
     if (act === "reveal") { practice.revealed[practice.idx] = !practice.revealed[practice.idx]; return renderQuiz(); }
-    // 看词写拼音：必须先选一个答案才能翻页
+    // 看词写拼音 · 在线作答：必须先选一个答案才能翻页
     if (act === "next") {
-      if (practice.mode === "word2pin" && (!practice._mcq || !practice._mcq[practice.idx] || !practice._mcq[practice.idx].chosen))
+      if (practice.mode === "word2pin" && practice.form === "online" &&
+          (!practice._mcq || !practice._mcq[practice.idx] || !practice._mcq[practice.idx].chosen))
         return toast("请先选一个拼音答案哦");
       if (practice.idx < practice.words.length - 1) { practice.idx++; renderQuiz(); }
       return;
     }
     if (act === "prev") { if (practice.idx > 0) { practice.idx--; renderQuiz(); } return; }
     if (act === "toreview") {
-      if (practice.mode === "word2pin" && (!practice._mcq || !practice._mcq[practice.idx] || !practice._mcq[practice.idx].chosen))
+      if (practice.mode === "word2pin" && practice.form === "online" &&
+          (!practice._mcq || !practice._mcq[practice.idx] || !practice._mcq[practice.idx].chosen))
         return toast("请先选一个拼音答案哦");
       practice.phase = "review"; return renderReview();
     }
@@ -904,6 +976,7 @@
     var cnt = parseInt($("#countInput").value, 10);
     var words = pickWords(scope, (cnt && cnt > 0) ? cnt : 0);
     if (!words.length) { toast("该范围没有可用词语"); return; }
+    tabBeforePractice = currentTab; // 记住来时的 tab，“退出练习”时回到这里
     practice = { mode: (practice && practice.mode) || "tingxie", scope: scope, form: lastForm, words: words, idx: 0, phase: "quiz", revealed: {}, results: [] };
     renderQuiz();
   }
@@ -1047,13 +1120,13 @@
       return HanziWriter.create(el, ch, {
         width: 120, height: 120, padding: 8, showOutline: true, showCharacter: true,
         strokeColor: "#FF8A5B", radicalColor: "#2BC4A8",
-        strokeAnimationSpeed: 1, delayBetweenStrokes: 120, charDataLoader: HW_LOADER
+        strokeAnimationSpeed: 0.7, delayBetweenStrokes: 260, charDataLoader: HW_LOADER
       });
     } catch (e) { el.innerHTML = '<div class="tian-fallback">' + esc(ch) + "</div>"; return null; }
   }
 
   // 在线书写：空白田字格 + 手写识别（HanziWriter quiz）。
-  // 孩子每写对一笔即保留一笔；笔顺/笔画写错时，语音直接报出正确笔画名，
+  // 孩子每写对一笔即保留一笔；笔顺/笔画写错时，语音直接念出该笔的正确名称（不说“写错了…”），
   // 并由 HanziWriter 在该格中显示出“这一笔应该怎么写”（showHintAfterMisses: 1 = 错一次就提示）。
   function makeWriterQuiz(el, ch) {
     if (!window.HanziWriter) { el.innerHTML = ""; return null; } // 留白：仅保留 .tian 的米字格背景
@@ -1062,19 +1135,23 @@
       w = HanziWriter.create(el, ch, {
         width: 120, height: 120, padding: 8, showOutline: false, showCharacter: false,
         strokeColor: "#FF8A5B", radicalColor: "#2BC4A8",
-        strokeAnimationSpeed: 1, delayBetweenStrokes: 120, charDataLoader: HW_LOADER,
+        strokeAnimationSpeed: 0.7, delayBetweenStrokes: 260, charDataLoader: HW_LOADER,
+        leniency: 2.2,               // 放宽匹配阈值：大致画出来就算对，别挫败孩子
         highlightColor: "#3AA0FF",   // 笔顺提示高亮色：明显区别于孩子已写的珊瑚色
-        strokeHighlightSpeed: 1.5,   // 提示动画稍慢，看得清
+        strokeHighlightSpeed: 1.2,   // 提示动画稍慢，看得清
         highlightOnComplete: true,   // 整字写对后整体高亮，作为正反馈
         onMistake: function (strokeData, strokeNum) {
-          // 笔顺/笔画写错：语音直接报出该笔的正确名称；极少数无法确定名称的笔用通用提示
-          speak(strokeName(ch, strokeNum) || "这一笔不对，看老师写一遍");
+          var nm = strokeName(ch, strokeNum);
+          if (nm) speak(nm, NAME_RATE); // 只念正确笔画名，不报“写错了…”
         }
       });
       w.quiz({ showHintAfterMisses: 1 }); // 写错 1 次即高亮提示该笔的正确写法
     } catch (e) { el.innerHTML = ""; return null; }
     return w;
   }
+  var STROKE_DELAY = 340;   // 播放笔顺：两笔之间的停顿（毫秒），放慢便于跟写
+  var NAME_RATE = 0.78;     // 报笔画名的语速（比报词更慢、更清楚）
+
   // 逐笔演示正确写法 + 语音报笔画名（女播音员音色，只念“横/竖/撇…”）；done 在该字全部笔画播完后回调
   function revealWriter(wr, ch, done) {
     if (!wr) { if (done) done(); return; }
@@ -1089,10 +1166,10 @@
     (function step() {
       if (i >= n) { if (done) done(); return; }
       var nm = strokeName(ch, i);
-      if (nm) speak(nm); // 直接说笔画名字，不说“第几笔”
+      if (nm) speak(nm, NAME_RATE); // 直接说笔画名字，不说“第几笔”
       try {
-        wr.animateStroke(i).then(function () { i++; step(); });
-      } catch (e) { i++; step(); }
+        wr.animateStroke(i).then(function () { i++; setTimeout(step, STROKE_DELAY); });
+      } catch (e) { i++; setTimeout(step, STROKE_DELAY); }
     })();
   }
   // 多个字依次播放：先播左边，再播右边，不要同时播
