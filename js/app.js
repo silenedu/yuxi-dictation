@@ -121,6 +121,38 @@
     window.speechSynthesis.onvoiceschanged = function () { _voice = pickVoice(); _voiceReady = true; };
   }
 
+  /* ---------- 拼音自动生成（离线优先；按需加载，不拖慢首屏） ---------- */
+  var _pyQueue = null, _pyState = 0; // 0=未加载 1=加载中 2=就绪
+  function loadPinyinLib(cb) {
+    if (window.pinyinPro && window.pinyinPro.pinyin) { _pyState = 2; if (cb) cb(); return; }
+    if (cb) (_pyQueue = _pyQueue || []).push(cb);
+    if (_pyState === 1) return;
+    _pyState = 1;
+    var s = document.createElement("script");
+    s.src = "vendor/pinyin-pro.js";
+    s.onload = s.onerror = function () {
+      _pyState = (window.pinyinPro && window.pinyinPro.pinyin) ? 2 : 0;
+      var q = _pyQueue || []; _pyQueue = null;
+      q.forEach(function (f) { try { f(); } catch (e) {} });
+    };
+    document.head.appendChild(s);
+  }
+  // 同步取用：库已就绪才有结果，否则返回 ""（用于保存时兜底）
+  function pinyinNow(word) {
+    if (!word || !window.pinyinPro || !window.pinyinPro.pinyin) return "";
+    try {
+      return String(window.pinyinPro.pinyin(word, { toneType: "symbol", type: "string" }) || "")
+        .replace(/\s+/g, " ").trim();
+    } catch (e) { return ""; }
+  }
+  // 异步取用：需要时自动加载库
+  function autoPinyin(word, cb) {
+    var v = pinyinNow(word);
+    if (v) return cb(v);
+    if (!word) return cb("");
+    loadPinyinLib(function () { cb(pinyinNow(word)); });
+  }
+
   /* ---------- 聚合 ---------- */
   function aggregateWrong() {
     var map = {};
@@ -526,7 +558,8 @@
     var html = '<div class="card">' +
       '<div class="section-title">➕ 添加自定义词语</div>' +
       '<label class="field"><span>词语</span><input id="nw" type="text" placeholder="例如：彩虹" /></label>' +
-      '<label class="field"><span>拼音（用普通 a 即可）</span><input id="np" type="text" placeholder="例如：cǎi hóng" /></label>' +
+      '<label class="field"><span>拼音（自动生成）</span><input id="np" type="text" placeholder="输入词语后自动填好，无需手填" /></label>' +
+      '<div class="hint" style="margin:-4px 0 10px">拼音会自动生成；多音字如有出入，可直接改。</div>' +
       '<div class="row">' +
       '<label class="field" style="flex:1"><span>单元</span><input id="nu" type="number" min="1" value="1" /></label>' +
       '<label class="field" style="flex:2"><span>课文/来源</span><input id="nl" type="text" placeholder="可选" /></label>' +
@@ -546,6 +579,16 @@
       '</div>';
     html += '<div id="bankList">' + bankListHtml(cu.units, cu.keys, q, unit) + "</div></div>";
     view.innerHTML = html;
+
+    // 输入词语 → 自动生成拼音（拼音库按需加载；异步结果回来时若词语已改则不覆盖）
+    var nwEl = $("#nw"), npEl = $("#np");
+    if (nwEl && npEl) {
+      loadPinyinLib();
+      nwEl.addEventListener("input", function () {
+        var v = nwEl.value.trim();
+        autoPinyin(v, function (py) { if (nwEl.value.trim() === v) npEl.value = py; });
+      });
+    }
   }
 
   /* ---------- 错词本 ---------- */
@@ -1042,14 +1085,18 @@
 
   function doAddWord() {
     var word = $("#nw").value.trim();
-    var pinyin = $("#np").value.trim();
-    if (!word || !pinyin) { toast("词语和拼音都要填"); return; }
+    if (!word) { toast("请填写词语"); return; }
     var unit = parseInt($("#nu").value, 10) || 1;
     var lesson = $("#nl").value.trim();
-    customWords.push({ word: word, pinyin: pinyin, unit: unit, lesson: lesson });
-    save(LS.custom, customWords);
-    toast("已添加：" + word);
-    renderBank();
+    var typed = $("#np") ? $("#np").value.trim() : "";
+    function commit(py) {
+      customWords.push({ word: word, pinyin: py || "", unit: unit, lesson: lesson });
+      save(LS.custom, customWords);
+      toast(py ? "已添加：" + word : "已添加：" + word + "（拼音未生成，可稍后补）");
+      renderBank();
+    }
+    if (typed) return commit(typed);   // 手动改过的按用户填的来
+    autoPinyin(word, commit);          // 没填 → 自动生成，无需家长输入
   }
 
   /* 拍照上传：压缩到最大 640px 再存为 base64，避免撑爆 localStorage */
@@ -1075,7 +1122,7 @@
   function doManualSave() {
     var word = $("#mw").value.trim();
     if (!word) { toast("请填写词语"); return; }
-    var pinyin = ($("#mp") ? $("#mp").value.trim() : "");
+    var pinyin = ($("#mp") ? $("#mp").value.trim() : "") || pinyinNow(word); // 未填则自动补拼音
     var note = $("#mn").value.trim();
     var type = manualType;
     records.push({ id: Date.now(), date: today(), mode: "manual", scope: "manual", items: [{ word: word, pinyin: pinyin, correct: false, wrongChars: [], type: type }], note: note });
