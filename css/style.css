@@ -339,6 +339,9 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--p
     0 0, 0 0;
 }
 .tian svg { touch-action: none; }   /* 触屏手写时禁止页面滚动/缩放，保证笔画连贯 */
+
+/* 错词本：点击词语 → 笔顺卡片（虚线下划线提示可点） */
+.wb-word.clickable { cursor: pointer; border-bottom: 2px dashed var(--primary); padding-bottom: 1px; }
 .tian-fallback {
   width: 120px; height: 120px; border: 3px solid var(--primary); border-radius: 10px;
   display: flex; align-items: center; justify-content: center;
