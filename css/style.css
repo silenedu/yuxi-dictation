@@ -340,6 +340,14 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--p
   font-size: 56px; font-weight: 800; color: var(--text); background: #FFF7F1;
 }
 
+/* ---------- 看词写拼音：四选一 ---------- */
+.mcq-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 6px 0 2px; }
+.btn.mcq { font-size: 22px; padding: 16px 10px; width: 100%; }
+.btn.mcq.ok { background: #5BC97A; color: #fff; border-color: #5BC97A; }
+.btn.mcq.bad { background: #ffd9d2; color: #c0392b; border-color: #ffb3a7; }
+.ok-tip { color: #2e9e54; font-weight: 800; margin: 10px 0 0; }
+.bad-tip { color: #c0392b; font-weight: 800; margin: 10px 0 0; }
+
 /* ---------- 错因筛选 chips（仅“词语错”出现，不含“拼音错”） ---------- */
 .cause-row { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0 6px; }
 .cause-chip {
