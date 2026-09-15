@@ -68,15 +68,37 @@
 
   function allWords() { return WORD_BANK.concat(customWords); }
 
-  /* ---------- TTS ---------- */
-  function speak(text) {
-    if (!("speechSynthesis" in window)) return;
+  /* ---------- TTS（女播音员音色：字正腔圆、清晰饱满） ---------- */
+  var _voice = null, _voiceReady = false;
+  function pickVoice() {
     try {
-      speechSynthesis.cancel();
+      var vs = window.speechSynthesis.getVoices() || [];
+      if (!vs.length) return null;
+      var zh = vs.filter(function (v) { return /zh|cmn|Chinese/i.test(v.lang || "") || /zh|cmn|Chinese/i.test(v.name || ""); });
+      var pool = zh.length ? zh : vs;
+      // 优先挑选中文“女声”候选
+      var pref = ["Ting-Ting", "Ting", "Yaoyao", "Huihui", "Mei-Jia", "Mei", "Xiaoxiao", "Xiao", "Yu", "female", "Female", "普通话", "Google 普通话"];
+      for (var i = 0; i < pref.length; i++) {
+        for (var j = 0; j < pool.length; j++) {
+          if (pool[j].name && pool[j].name.indexOf(pref[i]) >= 0) return pool[j];
+        }
+      }
+      return pool[0];
+    } catch (e) { return null; }
+  }
+  function speak(text) {
+    if (!("speechSynthesis" in window) || !text) return;
+    try {
+      if (!_voiceReady) { _voice = pickVoice(); _voiceReady = true; }
+      window.speechSynthesis.cancel();
       var u = new SpeechSynthesisUtterance(text);
-      u.lang = "zh-CN"; u.rate = 0.8; u.pitch = 1;
-      speechSynthesis.speak(u);
+      u.lang = "zh-CN"; u.rate = 0.92; u.pitch = 1.06; u.volume = 1; // 稍慢、微扬，更清晰有感情
+      if (_voice) u.voice = _voice;
+      window.speechSynthesis.speak(u);
     } catch (e) {}
+  }
+  if ("speechSynthesis" in window) {
+    window.speechSynthesis.onvoiceschanged = function () { _voice = pickVoice(); _voiceReady = true; };
   }
 
   /* ---------- 聚合 ---------- */
@@ -210,12 +232,18 @@
       '<button data-mode="pin2word">看拼音写词</button>' +
       '<button data-mode="word2pin">看词写拼音</button>' +
       "</div>";
+    var formSeg =
+      '<div class="seg" id="formSeg">' +
+      '<button data-form="paper" class="' + (lastForm === "paper" ? "on" : "") + '">📝 本子听写</button>' +
+      '<button data-form="online" class="' + (lastForm === "online" ? "on" : "") + '">💻 在线听写</button>' +
+      "</div>";
 
     view.innerHTML =
       '<div class="card">' +
       '<div class="section-title">✏️ 新的一次练习</div>' +
       '<p class="muted">孩子纸面默写，家长事后在 APP 里批改、标错字、选归因。</p>' +
       '<label class="field"><span>出题方式</span>' + modeSeg + "</label>" +
+      '<label class="field"><span>听写形式</span>' + formSeg + "</label>" +
       '<label class="field"><span>词语范围</span><select id="scopeSel">' + unitOpts + "</select></label>" +
       '<label class="field"><span>本次词数（留空或 0 = 全部）</span>' +
       '<input id="countInput" type="number" min="1" placeholder="例如 10" /></label>' +
@@ -224,6 +252,8 @@
   }
 
   function renderQuiz() {
+    destroyQuizWriters();
+    if (practice.form === "online" && practice.mode !== "word2pin") return renderOnlineQuiz();
     var i = practice.idx;
     var w = practice.words[i];
     var total = practice.words.length;
@@ -327,7 +357,7 @@
       out += '<div style="margin:10px 0 4px;font-weight:700">单元' + k + "（" + list.length + "）</div>";
       list.forEach(function (w) {
         var isCustom = customWords.indexOf(w) >= 0;
-        out += '<div class="list-row">' +
+        out += '<div class="list-row clickable" data-act="wstroke" data-w="' + esc(w.word) + '" data-p="' + esc(w.pinyin) + '">' +
           '<div><span class="list-word">' + esc(w.word) + '</span> <span class="pinyin">' + py(w.pinyin) + "</span>" +
           '<div class="unit-tag">' + esc(w.lesson || "") + "</div></div>" +
           (isCustom ? '<button class="del" data-act="delword" data-w="' + esc(w.word) + '">删除</button>' : "") +
@@ -394,7 +424,7 @@
   }
 
   function renderWrong() {
-    var list = wrongBookList();
+    var list = filterByCat(wrongBookList(), wrongCat, wrongCause);
     if (!list.length) {
       view.innerHTML = '<div class="card empty">🎉 还没有错词！<br/>去"词语听写"做几次默写，或点下方手动添加。</div>' +
         (showManual ? manualFormHtml() : '<button class="btn primary block" data-act="toggelmanual" style="margin-top:10px">➕ 手动添加错词</button>');
@@ -427,9 +457,16 @@
     var manualBtn = '<button class="btn primary block" data-act="toggelmanual" style="margin-bottom:10px">' + (showManual ? "收起 ✕" : "➕ 手动添加错词") + "</button>";
     var manualForm = showManual ? manualFormHtml() : "";
 
+    var wcatSeg = '<div class="seg" style="max-width:340px;margin-bottom:8px">' +
+      '<button data-act="wrong-cat" data-cat="pinyin" class="' + (wrongCat === "pinyin" ? "on" : "") + '">拼音错</button>' +
+      '<button data-act="wrong-cat" data-cat="word" class="' + (wrongCat === "word" ? "on" : "") + '">词语错</button>' +
+      "</div>";
+    var wcause = wrongCat === "word" ? causeChipsHtml(wrongCause, "wrong-cause") : "";
+
     view.innerHTML =
       manualBtn + manualForm +
       '<div class="card"><div class="section-title">❌ 错词本（' + list.length + "）</div>" +
+      wcatSeg + wcause +
       (due ? '<button class="btn green block" data-act="smartreview" style="margin-bottom:10px">🔔 智能复习（今日待复习 ' + due + '）</button>' : "") +
       '<button class="btn primary block" data-act="reviewwrong" style="margin-bottom:10px">🔁 复习所有错词</button>' +
       '<div class="wb-grid">' + rows + "</div></div>";
@@ -442,9 +479,15 @@
     var masteredCount = Object.keys(mastered).filter(function (k) { return mastered[k]; }).length;
     var due = dueWords();
 
-    var wrong = aggregateWrong().slice(0, 10);
+    var catSeg = '<div class="seg" style="max-width:320px;margin-bottom:6px">' +
+      '<button data-act="dash-cat" data-cat="pinyin" class="' + (dashCat === "pinyin" ? "on" : "") + '">拼音错</button>' +
+      '<button data-act="dash-cat" data-cat="word" class="' + (dashCat === "word" ? "on" : "") + '">词语错</button>' +
+      "</div>";
+    var causeBox = dashCat === "word" ? causeChipsHtml(dashCause, "dash-cause") : "";
+
+    var wrong = filterByCat(aggregateWrong(), dashCat, dashCause).slice(0, 10);
     var topHtml = wrong.length ? wrong.map(function (w, i) {
-      return '<div class="list-row"><span><b>' + (i + 1) + ".</b> " + esc(w.word) + ' <span class="pinyin">' + py(w.pinyin) + "</span></span>" +
+      return '<div class="list-row clickable" data-act="wstroke" data-w="' + esc(w.word) + '" data-p="' + esc(w.pinyin) + '"><span><b>' + (i + 1) + ".</b> " + esc(w.word) + ' <span class="pinyin">' + py(w.pinyin) + "</span></span>" +
         '<span class="badge red">' + w.count + " 次</span></div>";
     }).join("") : '<p class="muted">暂无高频错词。</p>';
 
@@ -457,7 +500,7 @@
       stat(masteredCount, "已掌握错词", masteredCount ? "show-mastered" : null) +
       stat(due.length, "今日待复习", due.length ? "show-due" : null) +
       "</div>" +
-      '<div class="card"><div class="section-title">🔝 高频错词 Top</div>' + topHtml + "</div>" +
+      '<div class="card"><div class="section-title">🔝 高频错词 Top</div>' + catSeg + causeBox + topHtml + "</div>" +
       '<div class="card"><div class="section-title">🧩 错字归因分布</div>' + pie + "</div>";
   }
 
@@ -496,7 +539,7 @@
     $("#modalBody").innerHTML = body + (footerHtml || "");
     modal.classList.remove("hidden");
   }
-  function closeModal() { modal.classList.add("hidden"); }
+  function closeModal() { destroyModalWriters(); modal.classList.add("hidden"); }
 
   /* ---------- 闯关记录（历史） ---------- */
   function renderRecords() {
@@ -620,6 +663,19 @@
     }
     if (act === "save") return doSave();
 
+    // 看板 / 错词本：拼音错·词语错 分类切换 + 词语错错因筛选
+    if (act === "dash-cat") { dashCat = t.dataset.cat; dashCause = ""; return renderDash(); }
+    if (act === "dash-cause") { dashCause = t.dataset.k || ""; return renderDash(); }
+    if (act === "wrong-cat") { wrongCat = t.dataset.cat; wrongCause = ""; return renderWrong(); }
+    if (act === "wrong-cause") { wrongCause = t.dataset.k || ""; return renderWrong(); }
+
+    // 点击词语 → 田字格笔顺卡片
+    if (act === "wstroke") { openStrokeModal(t.dataset.w, t.dataset.p); return; }
+
+    // 在线听写：播放全部笔顺 / 完成本题
+    if (act === "on-playall") { quizWriters.forEach(function (w) { if (w && w.animateCharacter) w.animateCharacter(); }); return; }
+    if (act === "on-done") { finishOnlineWord(); return; }
+
     if (act === "show-due") {
       openWordModal("🔔 今日待复习（" + dueWords().length + "）", dueWords(),
         '<button class="btn green block" data-act="modal-start-review" style="margin-top:6px">开始智能复习 →</button>');
@@ -691,6 +747,14 @@
     document.querySelectorAll("#modeSeg button").forEach(function (x) { x.classList.toggle("on", x === b); });
   });
 
+  // 听写形式切换（本子 / 在线）
+  view.addEventListener("click", function (e) {
+    var b = e.target.closest("#formSeg button");
+    if (!b) return;
+    lastForm = b.dataset.form;
+    document.querySelectorAll("#formSeg button").forEach(function (x) { x.classList.toggle("on", x === b); });
+  });
+
   // 词语库搜索（只刷新列表，保留输入框焦点）
   view.addEventListener("input", function (e) {
     if (e.target && e.target.id === "bankSearch") {
@@ -729,6 +793,11 @@
     if (!b) return;
     var a = b.dataset.act;
     if (a === "closemodal") { closeModal(); return; }
+    if (a === "tian-play") {
+      var wi = +b.dataset.i;
+      if (modalWriters[wi] && modalWriters[wi].animateCharacter) modalWriters[wi].animateCharacter();
+      return;
+    }
     if (a === "modal-start-review") {
       closeModal();
       var dw = dueWords();
@@ -747,7 +816,7 @@
     var cnt = parseInt($("#countInput").value, 10);
     var words = pickWords(scope, (cnt && cnt > 0) ? cnt : 0);
     if (!words.length) { toast("该范围没有可用词语"); return; }
-    practice = { mode: (practice && practice.mode) || "tingxie", scope: scope, words: words, idx: 0, phase: "quiz", revealed: {}, results: [] };
+    practice = { mode: (practice && practice.mode) || "tingxie", scope: scope, form: lastForm, words: words, idx: 0, phase: "quiz", revealed: {}, results: [] };
     renderQuiz();
   }
 
@@ -852,6 +921,187 @@
   $("#tabBar").addEventListener("click", function (e) {
     var b = e.target.closest(".tab"); if (!b) return; setTab(b.dataset.tab);
   });
+
+  /* ---------- 田字格 / 笔顺动画（HanziWriter，离线优先） ---------- */
+  var _strokeCache = null;            // 本地 vendor/strokes.json（一次加载，离线可用）
+  var modalWriters = [];              // 弹层里的田字格实例
+  var quizWriters = [];               // 在线听写时的田字格实例
+  var lastForm = "paper";             // 听写形式：paper 本子 / online 在线
+
+  // 词语错归因（不含“拼音错”），用于“词语错”的错因筛选
+  var WORD_CAUSE_KEYS = ["tone_same", "shape_same", "stroke", "unknown"];
+  var dashCat = "pinyin", dashCause = "";     // 看板高频错词分类状态
+  var wrongCat = "pinyin", wrongCause = "";   // 错词本分类状态
+
+  function isHanzi(c) { return c && c.charCodeAt(0) >= 0x4e00 && c.charCodeAt(0) <= 0x9fff; }
+
+  // 统一的汉字数据加载器：先读本地合并包（离线），缺失再回退 CDN
+  function HW_LOADER(char, onLoad) {
+    function fromCDN() {
+      fetch("https://cdn.jsdelivr.net/npm/hanzi-writer-data@2.0/" + encodeURIComponent(char) + ".json")
+        .then(function (r) { return r.json(); }).then(onLoad).catch(function () { onLoad(null); });
+    }
+    if (_strokeCache) { if (_strokeCache[char]) onLoad(_strokeCache[char]); else fromCDN(); return; }
+    fetch("vendor/strokes.json").then(function (r) { return r.json(); }).then(function (map) {
+      _strokeCache = map;
+      if (map[char]) onLoad(map[char]); else fromCDN();
+    }).catch(function () { fromCDN(); });
+  }
+
+  function makeWriter(el, ch) {
+    if (!window.HanziWriter) { el.innerHTML = '<div class="tian-fallback">' + esc(ch) + "</div>"; return null; }
+    try {
+      return HanziWriter.create(el, ch, {
+        width: 120, height: 120, padding: 8, showOutline: true, showCharacter: true,
+        strokeColor: "#FF8A5B", radicalColor: "#2BC4A8",
+        strokeAnimationSpeed: 1, delayBetweenStrokes: 120, charDataLoader: HW_LOADER
+      });
+    } catch (e) { el.innerHTML = '<div class="tian-fallback">' + esc(ch) + "</div>"; return null; }
+  }
+
+  function makeWriterQuiz(el, ch, wi, ci) {
+    if (!window.HanziWriter) { el.innerHTML = '<div class="tian-fallback">' + esc(ch) + "</div>"; return null; }
+    var w;
+    try {
+      w = HanziWriter.create(el, ch, {
+        width: 120, height: 120, padding: 8, showOutline: true, showCharacter: false,
+        strokeColor: "#FF8A5B", radicalColor: "#2BC4A8",
+        strokeAnimationSpeed: 1, delayBetweenStrokes: 120, charDataLoader: HW_LOADER,
+        onComplete: function () { if (practice._online && practice._online[wi]) practice._online[wi].chars[ci].ok = true; },
+        onMistake: function (strokeNum) {
+          var nm = strokeName(ch, strokeNum);
+          if (nm) speak("第" + (strokeNum + 1) + "笔，" + nm + "，应该这样写");
+          else speak("第" + (strokeNum + 1) + "笔写错啦，看老师写一遍");
+        }
+      });
+      w.quiz();
+    } catch (e) { el.innerHTML = '<div class="tian-fallback">' + esc(ch) + "</div>"; return null; }
+    return w;
+  }
+
+  function destroyModalWriters() { modalWriters.forEach(function (w) { try { w.cancelQuiz && w.cancelQuiz(); } catch (e) {} }); modalWriters = []; }
+  function destroyQuizWriters() { quizWriters.forEach(function (w) { try { w.cancelQuiz && w.cancelQuiz(); } catch (e) {} }); quizWriters = []; }
+
+  // 依据田字格中位点，粗略判别基本笔画名（仅对横/竖/撇/捺/点/提有把握时才念，避免误教）
+  function strokeName(ch, idx) {
+    if (_strokeCache && _strokeCache[ch] && _strokeCache[ch].medians && _strokeCache[ch].medians[idx]) {
+      return classifyStroke(_strokeCache[ch].medians[idx]);
+    }
+    return "";
+  }
+  function classifyStroke(median) {
+    if (!median || median.length < 2) return "";
+    var s = median[0], e = median[median.length - 1];
+    var dx = e[0] - s[0], dy = e[1] - s[1];
+    var len = Math.hypot(dx, dy);
+    if (len < 150) return "点";
+    var adx = Math.abs(dx), ady = Math.abs(dy);
+    if (adx < ady * 0.4) return dy > 0 ? "竖" : "提";
+    if (ady < adx * 0.4) return "横";
+    if (dx < 0 && dy > 0) return "撇";
+    if (dx > 0 && dy > 0) return "捺";
+    if (dx > 0 && dy < 0) return "提";
+    if (dx < 0 && dy < 0) return "撇";
+    return "";
+  }
+
+  // 词语卡片 → 田字格笔顺弹层
+  function openStrokeModal(word, pinyin) {
+    destroyModalWriters();
+    $("#modalTitle").textContent = "✍️ " + word + " 笔顺";
+    var chars = word.split("").filter(isHanzi);
+    var html = '<div style="text-align:center;margin-bottom:6px">' + (pinyin ? pySpan(pinyin) : "") + "</div>";
+    html += '<div class="tian-row">';
+    chars.forEach(function (c, i) {
+      html += '<div class="tian-cell"><div class="tian" id="tian-' + i + '"></div>' +
+        '<button class="btn ghost tian-play" data-act="tian-play" data-i="' + i + '" style="margin-top:6px;font-size:14px">▶ 笔顺</button></div>';
+    });
+    html += "</div><p class=\"muted\" style=\"text-align:center;margin-top:8px\">点“笔顺”播放，跟着写一写吧～</p>";
+    $("#modalBody").innerHTML = html;
+    modal.classList.remove("hidden");
+    setTimeout(function () {
+      chars.forEach(function (c, i) {
+        var el = document.getElementById("tian-" + i);
+        if (el) { var w = makeWriter(el, c); if (w) modalWriters.push(w); }
+      });
+    }, 30);
+  }
+
+  // 在线听写：田字格逐字描红
+  function renderOnlineQuiz() {
+    destroyQuizWriters();
+    var i = practice.idx, w = practice.words[i], total = practice.words.length;
+    var chars = w.word.split("").filter(isHanzi);
+    var pct = Math.round((i + 1) / total * 100);
+    var cells = chars.map(function (c, ci) {
+      return '<div class="tian-cell"><div class="tian" id="on-' + ci + '"></div></div>';
+    }).join("");
+    view.innerHTML =
+      '<div class="card quiz-stage">' +
+      '<div class="quiz-topbar"><button class="icon-btn" data-act="exit">✕ 退出练习</button>' +
+      '<div class="quiz-index">第 ' + (i + 1) + " / " + total + " 题</div></div>" +
+      '<div class="quiz-prog">' +
+      '<div class="quiz-prog-row"><span class="quiz-prog-label">完成进度</span><span class="quiz-prog-pct">' + pct + "%</span></div>" +
+      '<div class="prog"><div class="prog-fill" style="width:' + pct + '%"></div></div></div>' +
+      '<div class="row" style="justify-content:center;gap:10px;margin:6px 0">' +
+      '<button class="btn primary read-btn" data-act="read">🔊 读词</button>' +
+      '<button class="btn ghost" data-act="on-playall">▶ 播放笔顺</button>' +
+      "</div>" +
+      (practice.revealed[i] ? '<div class="big-word">' + esc(w.word) + '</div><div class="pinyin">' + py(w.pinyin) + "</div>"
+        : '<p class="muted">听老师读词，在田字格里写一写；写错了会有笔顺提示哦。</p>') +
+      '<div class="tian-row" id="onRow" style="justify-content:center;margin-top:10px">' + cells + "</div>" +
+      '<div class="row" style="justify-content:center;margin-top:12px">' +
+      '<button class="btn ghost" data-act="reveal">显示答案</button>' +
+      '<button class="btn primary" data-act="on-done">完成本题 ✓</button>' +
+      "</div></div>";
+    practice._online = practice._online || {};
+    practice._online[i] = { chars: chars.map(function () { return { ok: false }; }) };
+    setTimeout(function () {
+      chars.forEach(function (c, ci) {
+        var el = document.getElementById("on-" + ci);
+        if (el) { var wr = makeWriterQuiz(el, c, i, ci); if (wr) quizWriters.push(wr); }
+      });
+    }, 30);
+  }
+
+  function finishOnlineWord() {
+    var i = practice.idx, w = practice.words[i];
+    var chars = w.word.split("").filter(isHanzi);
+    var info = practice._online ? practice._online[i] : null;
+    var wrong = [];
+    chars.forEach(function (c, ci) {
+      var ok = info && info.chars[ci] && info.chars[ci].ok;
+      if (!ok) wrong.push({ char: c, idx: ci, type: null });
+    });
+    practice.results[i] = { correct: wrong.length === 0, wrongChars: wrong, type: wrong.length ? null : null };
+    destroyQuizWriters();
+    if (i < practice.words.length - 1) { practice.idx++; renderQuiz(); }
+    else { practice.phase = "review"; renderReview(); }
+  }
+
+  // 拼音错 / 词语错 分类
+  // 规则：只要有“拼音错”归因就归入“拼音错”；其余（含只标错未选归因的词）一律归入“词语错”，
+  // 保证每个错词都至少出现在一个分类里，不会凭空消失。
+  function wordCat(w) {
+    var pinyin = !!w.types["pinyin"];
+    return { pinyin: pinyin, word: !pinyin };
+  }
+  function filterByCat(list, cat, cause) {
+    return list.filter(function (w) {
+      var c = wordCat(w);
+      if (cat === "pinyin") return c.pinyin;
+      // 词语错：归类到此的所有词；若指定错因则按错因筛选（错因里不含“拼音错”）
+      if (cause) return !!w.types[cause];
+      return c.word;
+    });
+  }
+  function causeChipsHtml(active, act) {
+    var chips = ['<button class="cause-chip ' + (active === "" ? "on" : "") + '" data-act="' + act + '" data-k="">全部</button>'];
+    WORD_CAUSE_KEYS.forEach(function (k) {
+      chips.push('<button class="cause-chip ' + (active === k ? "on" : "") + '" data-act="' + act + '" data-k="' + k + '">' + ATTR_LABEL[k] + "</button>");
+    });
+    return '<div class="cause-row">' + chips.join("") + "</div>";
+  }
 
   /* ---------- 启动 ---------- */
   // 注意：Service Worker 的注册放在 index.html 末尾内联脚本里完成，
