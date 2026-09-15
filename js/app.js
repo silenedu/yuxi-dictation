@@ -882,7 +882,8 @@
     if (a === "closemodal") { closeModal(); return; }
     if (a === "tian-play") {
       var wi = +b.dataset.i;
-      if (modalWriters[wi] && modalWriters[wi].animateCharacter) modalWriters[wi].animateCharacter();
+      // 逐笔动画演示 + 语音报笔画名（左→右单字，点哪个字播哪个字）
+      if (modalWriters[wi]) revealWriter(modalWriters[wi], b.dataset.ch || "");
       return;
     }
     if (a === "modal-start-review") {
@@ -1011,6 +1012,7 @@
 
   /* ---------- 田字格 / 笔顺动画（HanziWriter，离线优先） ---------- */
   var _strokeCache = null;            // 本地 vendor/strokes.json（一次加载，离线可用）
+  var _nameCache = null;              // 本地 vendor/stroke-names.json（逐笔标准笔画名，离线）
   var modalWriters = [];              // 弹层里的田字格实例
   var quizWriters = [];               // 在线听写时的田字格实例
   var lastForm = "paper";             // 听写形式：paper 本子 / online 在线
@@ -1036,6 +1038,8 @@
   }
   // 预加载本地笔画库：确保首次进入听写即可口播笔画名，且全程离线可用
   fetch("vendor/strokes.json").then(function (r) { return r.json(); }).then(function (m) { _strokeCache = m; }).catch(function () {});
+  // 预加载标准笔画名表（{字:[笔画名,...]}，按笔顺序，缺省项为空串=改用通用提示）
+  fetch("vendor/stroke-names.json").then(function (r) { return r.json(); }).then(function (m) { _nameCache = m; }).catch(function () {});
 
   function makeWriter(el, ch) {
     if (!window.HanziWriter) { el.innerHTML = '<div class="tian-fallback">' + esc(ch) + "</div>"; return null; }
@@ -1048,28 +1052,44 @@
     } catch (e) { el.innerHTML = '<div class="tian-fallback">' + esc(ch) + "</div>"; return null; }
   }
 
-  // 在线听写（默写）：默认不显示汉字，只给空白田字格让孩子凭记忆写。
-  // 点“显示答案/播放笔顺”时才逐笔动画展示正确写法并口播笔画名。
+  // 在线书写：空白田字格 + 手写识别（HanziWriter quiz）。
+  // 孩子每写对一笔即保留一笔；笔顺/笔画写错时，语音直接报出正确笔画名，
+  // 并由 HanziWriter 在该格中显示出“这一笔应该怎么写”（showHintAfterMisses: 1 = 错一次就提示）。
   function makeWriterQuiz(el, ch) {
     if (!window.HanziWriter) { el.innerHTML = ""; return null; } // 留白：仅保留 .tian 的米字格背景
+    var w;
     try {
-      return HanziWriter.create(el, ch, {
+      w = HanziWriter.create(el, ch, {
         width: 120, height: 120, padding: 8, showOutline: false, showCharacter: false,
         strokeColor: "#FF8A5B", radicalColor: "#2BC4A8",
-        strokeAnimationSpeed: 1, delayBetweenStrokes: 120, charDataLoader: HW_LOADER
+        strokeAnimationSpeed: 1, delayBetweenStrokes: 120, charDataLoader: HW_LOADER,
+        highlightColor: "#3AA0FF",   // 笔顺提示高亮色：明显区别于孩子已写的珊瑚色
+        strokeHighlightSpeed: 1.5,   // 提示动画稍慢，看得清
+        highlightOnComplete: true,   // 整字写对后整体高亮，作为正反馈
+        onMistake: function (strokeData, strokeNum) {
+          // 笔顺/笔画写错：语音直接报出该笔的正确名称；极少数无法确定名称的笔用通用提示
+          speak(strokeName(ch, strokeNum) || "这一笔不对，看老师写一遍");
+        }
       });
+      w.quiz({ showHintAfterMisses: 1 }); // 写错 1 次即高亮提示该笔的正确写法
     } catch (e) { el.innerHTML = ""; return null; }
+    return w;
   }
-  // 逐笔演示正确写法 + 口播笔画名（女播音员音色）；done 在该字全部笔画播完后回调
+  // 逐笔演示正确写法 + 语音报笔画名（女播音员音色，只念“横/竖/撇…”）；done 在该字全部笔画播完后回调
   function revealWriter(wr, ch, done) {
     if (!wr) { if (done) done(); return; }
     try { wr.hideCharacter(); } catch (e) {}
     var medians = (_strokeCache && _strokeCache[ch] && _strokeCache[ch].medians) || [];
     var n = medians.length, i = 0;
+    if (!n) { // 笔画数据尚未就绪：退化为整字动画，保证仍能演示（此分支无口播）
+      try { wr.animateCharacter().then(function () { if (done) done(); }); }
+      catch (e) { if (done) done(); }
+      return;
+    }
     (function step() {
       if (i >= n) { if (done) done(); return; }
       var nm = strokeName(ch, i);
-      if (nm) speak("第" + (i + 1) + "笔，" + nm);
+      if (nm) speak(nm); // 直接说笔画名字，不说“第几笔”
       try {
         wr.animateStroke(i).then(function () { i++; step(); });
       } catch (e) { i++; step(); }
@@ -1088,26 +1108,33 @@
   function destroyModalWriters() { modalWriters.forEach(function (w) { try { w.cancelQuiz && w.cancelQuiz(); } catch (e) {} }); modalWriters = []; }
   function destroyQuizWriters() { quizWriters.forEach(function (w) { try { w.cancelQuiz && w.cancelQuiz(); } catch (e) {} }); quizWriters = []; }
 
-  // 依据田字格中位点，粗略判别基本笔画名（仅对横/竖/撇/捺/点/提有把握时才念，避免误教）
+  // 笔画名：优先取本地标准笔画名表（逐笔精确、覆盖整个词库、离线可用）；
+  // 表里没有（如自定义词）时退化为按中位点几何粗判基本笔画；仍无把握返回空串（改用通用提示）。
   function strokeName(ch, idx) {
+    var nm = _nameCache && _nameCache[ch] && _nameCache[ch][idx];
+    if (nm) return nm;
     if (_strokeCache && _strokeCache[ch] && _strokeCache[ch].medians && _strokeCache[ch].medians[idx]) {
       return classifyStroke(_strokeCache[ch].medians[idx]);
     }
     return "";
   }
+  // 几何兜底：只对「基本笔画」有把握时才命名，复合笔画（折/钩/弯）一律留空避免误教。
+  // 注意：hanzi-writer 数据 y 轴向上（y 增大 = 画面向上），故“竖”对应 dy<0。
   function classifyStroke(median) {
     if (!median || median.length < 2) return "";
-    var s = median[0], e = median[median.length - 1];
-    var dx = e[0] - s[0], dy = e[1] - s[1];
+    var a = median[0], b = median[median.length - 1];
+    var dx = b[0] - a[0], dy = b[1] - a[1];
     var len = Math.hypot(dx, dy);
-    if (len < 150) return "点";
+    if (len < 130) return "点";
     var adx = Math.abs(dx), ady = Math.abs(dy);
-    if (adx < ady * 0.4) return dy > 0 ? "竖" : "提";
-    if (ady < adx * 0.4) return "横";
-    if (dx < 0 && dy > 0) return "撇";
-    if (dx > 0 && dy > 0) return "捺";
-    if (dx > 0 && dy < 0) return "提";
+    var mi = median[Math.floor(median.length / 2)];
+    var relDev = Math.abs((mi[0] - a[0]) * dy - (mi[1] - a[1]) * dx) / (len * len || 1);
+    if (relDev > 0.40) return "";
+    if (ady < adx * 0.28) return dx > 0 ? "横" : "撇";
+    if (adx < ady * 0.30) return dy < 0 ? "竖" : "提";
     if (dx < 0 && dy < 0) return "撇";
+    if (dx > 0 && dy < 0) return "捺";
+    if (dx > 0 && dy > 0) return "提";
     return "";
   }
 
@@ -1120,7 +1147,7 @@
     html += '<div class="tian-row">';
     chars.forEach(function (c, i) {
       html += '<div class="tian-cell"><div class="tian" id="tian-' + i + '"></div>' +
-        '<button class="btn ghost tian-play" data-act="tian-play" data-i="' + i + '" style="margin-top:6px;font-size:14px">▶ 笔顺</button></div>';
+        '<button class="btn ghost tian-play" data-act="tian-play" data-i="' + i + '" data-ch="' + esc(c) + '" style="margin-top:6px;font-size:14px">▶ 笔顺</button></div>';
     });
     html += "</div><p class=\"muted\" style=\"text-align:center;margin-top:8px\">点“笔顺”播放，跟着写一写吧～</p>";
     $("#modalBody").innerHTML = html;
@@ -1147,9 +1174,9 @@
     var promptHtml = isPin
       ? '<div class="big-pinyin">' + py(w.pinyin) + "</div>" +
         (practice.revealed[i] ? '<div class="big-word">' + esc(w.word) + '</div><div class="pinyin">' + py(w.pinyin) + "</div>"
-          : '<p class="muted">看拼音，在空白田字格里默写；写完点“显示答案”对照笔顺。</p>')
+          : '<p class="muted">看拼音，直接在田字格里手写；笔顺写错了会语音提示哦。</p>')
       : '<button class="btn primary read-btn" data-act="read">🔊 读词</button>' +
-        '<p class="muted">听老师读词，在空白田字格里默写；写完点“显示答案”对照笔顺。</p>' +
+        '<p class="muted">听老师读词，直接在田字格里手写；笔顺写错了会语音提示哦。</p>' +
         (practice.revealed[i] ? '<div class="big-word">' + esc(w.word) + '</div><div class="pinyin">' + py(w.pinyin) + "</div>" : "");
     view.innerHTML =
       '<div class="card quiz-stage">' +
@@ -1172,10 +1199,16 @@
         if (el) { var wr = makeWriterQuiz(el, c); if (wr) wrs.push(wr); }
       });
       quizWriters = wrs;
-      if (practice.revealed[i]) {
-        wrs.forEach(function (wr) { try { wr.showCharacter(); } catch (e) {} });
-        if (practice._play) { practice._play = false; playAllStrokes(wrs, chars); }
+      if (practice._play) {
+        // 「播放笔顺」：逐字、逐笔动画演示 + 语音报笔画名（左→右依次播放，不同时播）
+        practice._play = false;
+        wrs.forEach(function (wr) { try { wr.cancelQuiz(); } catch (e) {} });
+        playAllStrokes(wrs, chars);
+      } else if (practice.revealed[i]) {
+        // 「显示答案」：直接把汉字显示出来，不做笔顺动画、不播报
+        wrs.forEach(function (wr) { try { wr.cancelQuiz(); wr.showCharacter(); } catch (e) {} });
       }
+      // 否则保持 quiz() 手写状态：孩子直接在田字格里写，写错有提示
     }, 30);
   }
 
