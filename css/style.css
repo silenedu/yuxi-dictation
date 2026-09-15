@@ -317,6 +317,10 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--p
 /* 米字格背景（横竖中线 + 对角虚线），帮助小朋友摆正笔画位置 */
 .tian {
   width: 120px; height: 120px;
+  /* 内容区恒为 120×120，使 HanziWriter 画布与米字格中线精确对齐（全局是 border-box） */
+  box-sizing: content-box;
+  position: relative;          /* HanziWriter 画布定位基准 */
+  touch-action: none;          /* 关键：触屏上手写时不触发页面滚动/缩放 */
   border: 3px solid var(--primary);
   border-radius: 10px;
   box-shadow: var(--shadow);
@@ -334,6 +338,7 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--p
     50% 0, 0 50%,
     0 0, 0 0;
 }
+.tian svg { touch-action: none; }   /* 触屏手写时禁止页面滚动/缩放，保证笔画连贯 */
 .tian-fallback {
   width: 120px; height: 120px; border: 3px solid var(--primary); border-radius: 10px;
   display: flex; align-items: center; justify-content: center;
