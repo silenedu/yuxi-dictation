@@ -672,8 +672,11 @@
     // 点击词语 → 田字格笔顺卡片
     if (act === "wstroke") { openStrokeModal(t.dataset.w, t.dataset.p); return; }
 
-    // 在线听写：播放全部笔顺 / 完成本题
-    if (act === "on-playall") { quizWriters.forEach(function (w) { if (w && w.animateCharacter) w.animateCharacter(); }); return; }
+    // 在线听写：播放全部笔顺（显示答案并逐笔动画+口播）/ 完成本题
+    if (act === "on-playall") {
+      practice.revealed[practice.idx] = true;
+      return renderOnlineQuiz();
+    }
     if (act === "on-done") { finishOnlineWord(); return; }
 
     if (act === "show-due") {
@@ -947,6 +950,8 @@
       if (map[char]) onLoad(map[char]); else fromCDN();
     }).catch(function () { fromCDN(); });
   }
+  // 预加载本地笔画库：确保首次进入听写即可口播笔画名，且全程离线可用
+  fetch("vendor/strokes.json").then(function (r) { return r.json(); }).then(function (m) { _strokeCache = m; }).catch(function () {});
 
   function makeWriter(el, ch) {
     if (!window.HanziWriter) { el.innerHTML = '<div class="tian-fallback">' + esc(ch) + "</div>"; return null; }
@@ -959,24 +964,32 @@
     } catch (e) { el.innerHTML = '<div class="tian-fallback">' + esc(ch) + "</div>"; return null; }
   }
 
-  function makeWriterQuiz(el, ch, wi, ci) {
-    if (!window.HanziWriter) { el.innerHTML = '<div class="tian-fallback">' + esc(ch) + "</div>"; return null; }
-    var w;
+  // 在线听写（默写）：默认不显示汉字，只给空白田字格让孩子凭记忆写。
+  // 点“显示答案/播放笔顺”时才逐笔动画展示正确写法并口播笔画名。
+  function makeWriterQuiz(el, ch) {
+    if (!window.HanziWriter) { el.innerHTML = ""; return null; } // 留白：仅保留 .tian 的米字格背景
     try {
-      w = HanziWriter.create(el, ch, {
-        width: 120, height: 120, padding: 8, showOutline: true, showCharacter: false,
+      return HanziWriter.create(el, ch, {
+        width: 120, height: 120, padding: 8, showOutline: false, showCharacter: false,
         strokeColor: "#FF8A5B", radicalColor: "#2BC4A8",
-        strokeAnimationSpeed: 1, delayBetweenStrokes: 120, charDataLoader: HW_LOADER,
-        onComplete: function () { if (practice._online && practice._online[wi]) practice._online[wi].chars[ci].ok = true; },
-        onMistake: function (strokeNum) {
-          var nm = strokeName(ch, strokeNum);
-          if (nm) speak("第" + (strokeNum + 1) + "笔，" + nm + "，应该这样写");
-          else speak("第" + (strokeNum + 1) + "笔写错啦，看老师写一遍");
-        }
+        strokeAnimationSpeed: 1, delayBetweenStrokes: 120, charDataLoader: HW_LOADER
       });
-      w.quiz();
-    } catch (e) { el.innerHTML = '<div class="tian-fallback">' + esc(ch) + "</div>"; return null; }
-    return w;
+    } catch (e) { el.innerHTML = ""; return null; }
+  }
+  // 逐笔演示正确写法 + 口播笔画名（女播音员音色）
+  function revealWriter(wr, ch) {
+    if (!wr) return;
+    try { wr.hideCharacter(); } catch (e) {}
+    var medians = (_strokeCache && _strokeCache[ch] && _strokeCache[ch].medians) || [];
+    var n = medians.length, i = 0;
+    (function step() {
+      if (i >= n) return;
+      var nm = strokeName(ch, i);
+      if (nm) speak("第" + (i + 1) + "笔，" + nm);
+      try {
+        wr.animateStroke(i).then(function () { i++; step(); });
+      } catch (e) { i++; step(); }
+    })();
   }
 
   function destroyModalWriters() { modalWriters.forEach(function (w) { try { w.cancelQuiz && w.cancelQuiz(); } catch (e) {} }); modalWriters = []; }
@@ -1048,32 +1061,24 @@
       '<button class="btn ghost" data-act="on-playall">▶ 播放笔顺</button>' +
       "</div>" +
       (practice.revealed[i] ? '<div class="big-word">' + esc(w.word) + '</div><div class="pinyin">' + py(w.pinyin) + "</div>"
-        : '<p class="muted">听老师读词，在田字格里写一写；写错了会有笔顺提示哦。</p>') +
+        : '<p class="muted">听老师读词，在空白田字格里默写；写完点“显示答案”对照笔顺。</p>') +
       '<div class="tian-row" id="onRow" style="justify-content:center;margin-top:10px">' + cells + "</div>" +
       '<div class="row" style="justify-content:center;margin-top:12px">' +
-      '<button class="btn ghost" data-act="reveal">显示答案</button>' +
+      '<button class="btn ghost" data-act="reveal">' + (practice.revealed[i] ? "隐藏答案" : "显示答案") + "</button>" +
       '<button class="btn primary" data-act="on-done">完成本题 ✓</button>' +
       "</div></div>";
-    practice._online = practice._online || {};
-    practice._online[i] = { chars: chars.map(function () { return { ok: false }; }) };
     setTimeout(function () {
       chars.forEach(function (c, ci) {
         var el = document.getElementById("on-" + ci);
-        if (el) { var wr = makeWriterQuiz(el, c, i, ci); if (wr) quizWriters.push(wr); }
+        if (el) { var wr = makeWriterQuiz(el, c); if (wr) { quizWriters.push(wr); if (practice.revealed[i]) revealWriter(wr, c); } }
       });
     }, 30);
   }
 
   function finishOnlineWord() {
     var i = practice.idx, w = practice.words[i];
-    var chars = w.word.split("").filter(isHanzi);
-    var info = practice._online ? practice._online[i] : null;
-    var wrong = [];
-    chars.forEach(function (c, ci) {
-      var ok = info && info.chars[ci] && info.chars[ci].ok;
-      if (!ok) wrong.push({ char: c, idx: ci, type: null });
-    });
-    practice.results[i] = { correct: wrong.length === 0, wrongChars: wrong, type: wrong.length ? null : null };
+    // 在线默写由孩子写在本子上，App 无法判定对错，结果留空，交给“批改”页人工勾选。
+    practice.results[i] = { correct: true, wrongChars: [], type: null };
     destroyQuizWriters();
     if (i < practice.words.length - 1) { practice.idx++; renderQuiz(); }
     else { practice.phase = "review"; renderReview(); }
