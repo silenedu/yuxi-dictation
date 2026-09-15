@@ -1,4 +1,4 @@
-const CACHE = "yuxi-dictation-v4";
+const CACHE = "yuxi-dictation-v5";
 const ASSETS = [
   ".",
   "index.html",
