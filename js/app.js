@@ -68,21 +68,38 @@
 
   function allWords() { return WORD_BANK.concat(customWords); }
 
-  /* ---------- TTS（女播音员音色：字正腔圆、清晰饱满） ---------- */
+  /* ---------- TTS（女播音员音色：优先系统里的高品质声音，清晰、有亲和力） ---------- */
   var _voice = null, _voiceReady = false;
+  // 知名中文女声候选（按清晰度/亲和力排序，越靠前越优先）
+  var _GOOD_VOICES = [
+    "Ting-Ting", "Tingting", "婷婷",                 // Apple 普通话女声
+    "Xiaoxiao", "晓晓",                               // 微软 / Edge 女声
+    "Yu-shu", "Mei-Jia", "Meijia", "美佳",            // Apple
+    "Yaoyao", "瑶瑶", "Huihui", "慧慧", "Lili", "晓伊",
+    "Google 普通话", "Google"
+  ];
+  var _MALE_RE = /kangkang|康康|yun-?xi|云希|liang|亮|yunyang|male|男/i;
   function pickVoice() {
     try {
       var vs = window.speechSynthesis.getVoices() || [];
       if (!vs.length) return null;
-      var zh = vs.filter(function (v) { return /zh|cmn|Chinese/i.test(v.lang || "") || /zh|cmn|Chinese/i.test(v.name || ""); });
+      var zh = vs.filter(function (v) { return /zh|cmn|Chinese/i.test(v.lang || "") || /zh|cmn|Chinese|普通话/i.test(v.name || ""); });
       var pool = zh.length ? zh : vs;
-      // 优先挑选中文“女声”候选
-      var pref = ["Ting-Ting", "Ting", "Yaoyao", "Huihui", "Mei-Jia", "Mei", "Xiaoxiao", "Xiao", "Yu", "female", "Female", "普通话", "Google 普通话"];
-      for (var i = 0; i < pref.length; i++) {
-        for (var j = 0; j < pool.length; j++) {
-          if (pool[j].name && pool[j].name.indexOf(pref[i]) >= 0) return pool[j];
+      // 综合评分：高品质标记 > 知名女声 > 大陆普通话 > 女性 > 本地声音
+      function score(v) {
+        var n = v.name || "", s = 0;
+        if (/premium|enhanced|elite|siri|优质|增强|高级/i.test(n)) s += 120;  // 高品质音色（听感最自然）
+        if (_MALE_RE.test(n)) s -= 200;                                       // 避开男声
+        for (var i = 0; i < _GOOD_VOICES.length; i++) {
+          if (n.indexOf(_GOOD_VOICES[i]) >= 0) { s += 60 - i; break; }
         }
+        if (/zh[-_]?(cn|cmn|hans)/i.test(v.lang || "")) s += 40;              // 大陆普通话优先
+        else if (/^zh/i.test(v.lang || "")) s += 10;
+        if (/female|女/i.test(n)) s += 15;
+        if (v.localService) s += 5;                                           // 本地声音：响应快、离线可用
+        return s;
       }
+      pool.sort(function (a, b) { return score(b) - score(a); });
       return pool[0];
     } catch (e) { return null; }
   }
@@ -92,7 +109,10 @@
       if (!_voiceReady) { _voice = pickVoice(); _voiceReady = true; }
       window.speechSynthesis.cancel();
       var u = new SpeechSynthesisUtterance(text);
-      u.lang = "zh-CN"; u.rate = rate || 0.92; u.pitch = 1.06; u.volume = 1; // 默认稍慢微扬；报笔画名时更慢更清晰
+      u.lang = "zh-CN";
+      u.rate = rate || 0.85;   // 报词语速 0.92→0.85：更慢、读得更清楚
+      u.pitch = 1.05;          // 音调微扬，更亲切
+      u.volume = 1;
       if (_voice) u.voice = _voice;
       window.speechSynthesis.speak(u);
     } catch (e) {}
