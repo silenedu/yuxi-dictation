@@ -8,7 +8,7 @@
   --primary-l: #FFE7DA;
   --accent: #FFC93C;
   --orange: #FF7A45;
-  --blue: #4FB0E5;
+  --blue: #3FB6C8; /* 改为薄荷青，避免“蓝色”按钮/拼音与暖色主题冲突 */
   --cyan: #2BC4A8;
   --green: #5BC97A;
   --red: #FF6B6B;
@@ -308,7 +308,7 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--p
 .badge.green { background: #E3F6EC; color: var(--green); }
 
 /* ---------- Dashboard ---------- */
-.stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; }
+.stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; margin-bottom: 16px; }
 .stat { background: var(--card); border-radius: 16px; padding: 14px; box-shadow: var(--shadow); text-align: center; animation: fadeUp .28s ease both; }
 .stat .num { font-size: 30px; font-weight: 800; color: var(--primary-d); }
 .stat .lbl { font-size: 13px; color: var(--muted); }
