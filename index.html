@@ -40,13 +40,14 @@
 
   <div id="toast" class="toast"></div>
 
+  <script src="vendor/hanzi-writer.min.js"></script>
   <script src="js/data.js"></script>
   <script src="js/app.js"></script>
   <!-- Service Worker 注册放在 index.html（HTML 始终网络优先，可确保更新不被旧缓存卡住） -->
   <script>
     (function () {
       if (!("serviceWorker" in navigator)) return;
-      var SW_VER = "v10";
+      var SW_VER = "v11";
       window.addEventListener("load", function () {
         navigator.serviceWorker.register("sw.js?v=" + SW_VER).catch(function () {});
       });
