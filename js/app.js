@@ -97,6 +97,24 @@
       .sort(function (a, b) { return b.count - a.count || (b.last < a.last ? -1 : 1); });
   }
 
+  // 错词本完整列表：保留已标记的“已掌握”词（只是隐藏，不删除），仅排除“暂时隐藏”的词。
+  function wrongBookList() {
+    var map = {};
+    records.forEach(function (r) {
+      r.items.forEach(function (it) {
+        if (it.correct) return;
+        var w = it.word;
+        if (!map[w]) map[w] = { word: w, pinyin: it.pinyin, count: 0, last: r.date, types: {} };
+        map[w].count++;
+        if (r.date > map[w].last) map[w].last = r.date;
+        (it.wrongChars || []).forEach(function (c) { if (c.type) map[w].types[c.type] = (map[w].types[c.type] || 0) + 1; });
+      });
+    });
+    return Object.keys(map).map(function (k) { return map[k]; })
+      .filter(function (w) { return !hidden[w.word]; })
+      .sort(function (a, b) { return (b.count - a.count) || (b.last < a.last ? -1 : 1); });
+  }
+
   function attrTotals() {
     var t = {};
     records.forEach(function (r) {
@@ -214,7 +232,7 @@
     var promptHtml = "";
     if (practice.mode === "tingxie") {
       promptHtml =
-        '<button class="btn blue read-btn" data-act="read">🔊 读词</button>' +
+        '<button class="btn primary read-btn" data-act="read">🔊 读词</button>' +
         '<p class="muted">点“读词”报给孩子听写；下方可在需要时显示答案。</p>' +
         (revealed ? '<div class="big-word">' + esc(w.word) + '</div><div class="pinyin">' + py(w.pinyin) + "</div>" : "");
     } else if (practice.mode === "pin2word") {
@@ -285,8 +303,7 @@
       '<button class="icon-btn save" data-act="save">💾 保存</button>' +
       "</div>" +
       '<div class="card"><p class="muted">逐词标记对错；错的字点选出来，并选择归因类型。</p></div>' +
-      rows +
-      '<button class="btn green block" data-act="save" style="margin-top:6px">保存这次练习 💾</button>';
+      rows;
   }
 
   /* ---------- 词语库 ---------- */
@@ -377,10 +394,10 @@
   }
 
   function renderWrong() {
-    var list = aggregateWrong();
+    var list = wrongBookList();
     if (!list.length) {
       view.innerHTML = '<div class="card empty">🎉 还没有错词！<br/>去"词语听写"做几次默写，或点下方手动添加。</div>' +
-        (showManual ? manualFormHtml() : '<button class="btn blue block" data-act="toggelmanual" style="margin-top:10px">➕ 手动添加错词</button>');
+        (showManual ? manualFormHtml() : '<button class="btn primary block" data-act="toggelmanual" style="margin-top:10px">➕ 手动添加错词</button>');
       return;
     }
     var due = dueWords().length;
@@ -389,27 +406,32 @@
       var st = reviewState[w.word];
       var stageTxt = st && st.count ? " · 已复习 " + st.count + " 次" : "";
       var reviewMsg = reviewInfo(w.word);
+      var isMastered = !!mastered[w.word];
       return '<div class="wb-item">' +
         '<div><span class="wb-word">' + esc(w.word) + '</span> <span class="pinyin">' + py(w.pinyin) + "</span>" +
         '<div class="unit-tag">出错 ' + w.count + " 次 · 最近 " + w.last + stageTxt + "</div>" +
         (reviewMsg ? '<div class="unit-tag review-hint">' + reviewMsg + "</div>" : "") +
+        (isMastered ? '<div class="unit-tag" style="color:var(--green);font-weight:700">⭐ 已掌握（练习时自动跳过）</div>' : "") +
         (types ? '<div class="unit-tag">归因：' + types + "</div>" : "") +
         (photos[w.word] ? '<img class="wb-photo" src="' + photos[w.word] + '" style="display:block;margin-top:6px" />' : "") +
         "</div>" +
         '<div class="row">' +
+        (isMastered
+          ? '<button class="btn green" style="padding:8px 12px;font-size:14px" data-act="unmaster" data-w="' + esc(w.word) + '" title="取消已掌握">⭐ 已掌握</button>'
+          : '<button class="btn" style="padding:8px 12px;font-size:14px" data-act="master" data-w="' + esc(w.word) + '" title="标记为已掌握">标为已掌握</button>') +
         '<button class="btn danger" style="padding:8px 12px;font-size:14px" data-act="delwrong" data-w="' + esc(w.word) + '" title="彻底删除该错词">🗑️ 删除</button>' +
         '<button class="del" data-act="hide" data-w="' + esc(w.word) + '" title="暂时隐藏">隐藏</button>' +
         "</div></div>";
     }).join("");
 
-    var manualBtn = '<button class="btn blue block" data-act="toggelmanual" style="margin-bottom:10px">' + (showManual ? "收起 ✕" : "➕ 手动添加错词") + "</button>";
+    var manualBtn = '<button class="btn primary block" data-act="toggelmanual" style="margin-bottom:10px">' + (showManual ? "收起 ✕" : "➕ 手动添加错词") + "</button>";
     var manualForm = showManual ? manualFormHtml() : "";
 
     view.innerHTML =
       manualBtn + manualForm +
       '<div class="card"><div class="section-title">❌ 错词本（' + list.length + "）</div>" +
       (due ? '<button class="btn green block" data-act="smartreview" style="margin-bottom:10px">🔔 智能复习（今日待复习 ' + due + '）</button>' : "") +
-      '<button class="btn blue block" data-act="reviewwrong" style="margin-bottom:10px">🔁 复习所有错词</button>' +
+      '<button class="btn primary block" data-act="reviewwrong" style="margin-bottom:10px">🔁 复习所有错词</button>' +
       '<div class="wb-grid">' + rows + "</div></div>";
   }
 
@@ -512,7 +534,7 @@
   }
 
   function pieChart(totals) {
-    var colors = { tone_same: "#4FB0E5", shape_same: "#FF8A5B", stroke: "#FFC93C", pinyin: "#2BC4A8", unknown: "#9B6DD6" };
+    var colors = { tone_same: "#5BC97A", shape_same: "#FF8A5B", stroke: "#FFC93C", pinyin: "#2BC4A8", unknown: "#9B6DD6" };
     var keys = Object.keys(totals);
     var sum = keys.reduce(function (a, k) { return a + totals[k]; }, 0);
     if (!sum) return '<p class="muted">暂无错字归因数据。</p>';
@@ -631,6 +653,22 @@
       return renderWrong();
     }
     if (act === "hide") { hidden[t.dataset.w] = true; save(LS.hidden, hidden); delete reviewState[t.dataset.w]; save(LS.review, reviewState); toast("已隐藏"); return renderWrong(); }
+    if (act === "master") {
+      var mw = t.dataset.w;
+      mastered[mw] = true; save(LS.mastered, mastered);
+      toast("已标记为掌握 ⭐（仍保留在错词本，练习“错题本”时自动跳过）");
+      return renderWrong();
+    }
+    if (act === "unmaster") {
+      var uw = t.dataset.w;
+      delete mastered[uw]; save(LS.mastered, mastered);
+      if (!reviewState[uw]) {
+        reviewState[uw] = { stage: 0, due: today(), lastWrong: today(), lastReview: null, count: 0 };
+        save(LS.review, reviewState);
+      }
+      toast("已取消掌握，重新进入复习");
+      return renderWrong();
+    }
     if (act === "smartreview") {
       var dw = dueWords();
       if (!dw.length) return toast("今天没有待复习的词，雨锡真棒！🌟");
