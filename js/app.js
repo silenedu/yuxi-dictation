@@ -59,7 +59,7 @@
   var reviewState = load(LS.review, {}); // { 词: {stage, due, lastWrong, lastReview, count} }
   var photos = load(LS.photos, {});      // { 词: dataURL(压缩后的照片) }
 
-  var MODE_LABEL = { tingxie: "听写报词", pin2word: "看拼音写词", word2pin: "看词写拼音", manual: "手动录入", review: "智能复习", wrong: "错词复习" };
+  var MODE_LABEL = { tingxie: "听写练习", pin2word: "看拼音写词", word2pin: "看词写拼音", manual: "手动录入", review: "智能复习", wrong: "错词复习" };
 
   // 手动录入 / 练习页临时状态
   var showManual = false;
@@ -218,6 +218,13 @@
     if (practice.phase === "review") return renderReview();
   }
 
+  // 不同练习方式下的“作答形式”标签
+  function formLabels(mode) {
+    if (mode === "pin2word") return ["本子书写", "在线书写"];
+    if (mode === "word2pin") return ["本子作答", "在线作答"];
+    return ["本子听写", "在线听写"];
+  }
+
   function renderSetup() {
     var due = dueWords();
 
@@ -226,29 +233,73 @@
     unitOpts = '<option value="review">🔔 智能抽词（今日待复习 ' + due.length + '）</option>' +
                '<option value="wrong">🔁 仅错词本（复习）</option>' +
                '<option value="all">📚 全部单元</option>' + unitOpts;
+    var m = (practice && practice.mode) || "tingxie";
     var modeSeg =
       '<div class="seg" id="modeSeg">' +
-      '<button data-mode="tingxie" class="on">🔊 听写(报词)</button>' +
-      '<button data-mode="pin2word">看拼音写词</button>' +
-      '<button data-mode="word2pin">看词写拼音</button>' +
+      '<button data-mode="tingxie" class="' + (m === "tingxie" ? "on" : "") + '">🔊 听写练习</button>' +
+      '<button data-mode="pin2word" class="' + (m === "pin2word" ? "on" : "") + '">📝 看拼音写词</button>' +
+      '<button data-mode="word2pin" class="' + (m === "word2pin" ? "on" : "") + '">🔤 看词写拼音</button>' +
       "</div>";
+    var fl = formLabels(m);
     var formSeg =
       '<div class="seg" id="formSeg">' +
-      '<button data-form="paper" class="' + (lastForm === "paper" ? "on" : "") + '">📝 本子听写</button>' +
-      '<button data-form="online" class="' + (lastForm === "online" ? "on" : "") + '">💻 在线听写</button>' +
+      '<button data-form="paper" class="' + (lastForm === "paper" ? "on" : "") + '">📝 ' + fl[0] + '</button>' +
+      '<button data-form="online" class="' + (lastForm === "online" ? "on" : "") + '">💻 ' + fl[1] + '</button>' +
       "</div>";
 
     view.innerHTML =
       '<div class="card">' +
       '<div class="section-title">✏️ 新的一次练习</div>' +
       '<p class="muted">孩子纸面默写，家长事后在 APP 里批改、标错字、选归因。</p>' +
-      '<label class="field"><span>出题方式</span>' + modeSeg + "</label>" +
-      '<label class="field"><span>听写形式</span>' + formSeg + "</label>" +
+      '<label class="field"><span>练习方式</span>' + modeSeg + "</label>" +
+      '<label class="field"><span>作答形式</span>' + formSeg + "</label>" +
       '<label class="field"><span>词语范围</span><select id="scopeSel">' + unitOpts + "</select></label>" +
       '<label class="field"><span>本次词数（留空或 0 = 全部）</span>' +
       '<input id="countInput" type="number" min="1" placeholder="例如 10" /></label>' +
       '<button class="btn primary block" data-act="start">开始练习 →</button>' +
       "</div>";
+  }
+  // 看词写拼音 → 四选一：1 个正确拼音 + 3 个“易混淆”拼音（同音节不同声调、同声母/同韵母优先）
+  function toneless(s) {
+    return String(s).normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/\s+/g, "").toLowerCase();
+  }
+  var _INITS = ["zh", "ch", "sh", "b", "p", "m", "f", "d", "t", "n", "l", "g", "k", "h", "j", "q", "x", "r", "z", "c", "s", "y", "w"];
+  function parseSyl(s) {
+    s = toneless(s);
+    for (var k = 0; k < _INITS.length; k++) {
+      if (s.indexOf(_INITS[k]) === 0) return { ini: _INITS[k], fin: s.slice(_INITS[k].length) };
+    }
+    return { ini: "", fin: s };
+  }
+  // 拼音相近度：同音节(声调不同)＋声母/韵母相同 计分，越接近分越高
+  function pinyinSim(a, b) {
+    var as = a.split(" "), bs = b.split(" "), total = 0;
+    for (var i = 0; i < as.length; i++) {
+      var ap = parseSyl(as[i]), best = 0;
+      for (var j = 0; j < bs.length; j++) {
+        var bp = parseSyl(bs[j]), sc = 0;
+        if (toneless(as[i]) === toneless(bs[j])) sc = 10;
+        else { if (ap.ini && ap.ini === bp.ini) sc += 4; if (ap.fin && ap.fin === bp.fin) sc += 3; }
+        if (sc > best) best = sc;
+      }
+      total += best;
+    }
+    return total;
+  }
+  function buildMcq(target) {
+    var tp = target.pinyin;
+    var pool = allWords().filter(function (x) { return x.pinyin !== tp; });
+    var scored = pool.map(function (x) { return { p: x.pinyin, score: pinyinSim(tp, x.pinyin) }; });
+    scored.sort(function (m, n) { return n.score - m.score; });
+    var picks = [];
+    for (var k = 0; k < scored.length && picks.length < 3; k++) {
+      if (picks.indexOf(scored[k].p) < 0) picks.push(scored[k].p);
+    }
+    while (picks.length < 3) {
+      var r = pool[Math.floor(Math.random() * pool.length)];
+      if (r && picks.indexOf(r.pinyin) < 0 && r.pinyin !== tp) picks.push(r.pinyin);
+    }
+    return shuffle([tp].concat(picks));
   }
 
   function renderQuiz() {
@@ -270,9 +321,19 @@
         '<div class="big-pinyin">' + py(w.pinyin) + "</div>" +
         (revealed ? '<div class="big-word">' + esc(w.word) + "</div>" : '<p class="muted">孩子看拼音写词语，写完后点“显示词语”核对。</p>');
     } else {
+      // 看词写拼音 → 四选一（4 个易混淆拼音）
+      if (!practice._mcq) practice._mcq = {};
+      if (!practice._mcq[i]) practice._mcq[i] = { options: buildMcq(w), answer: w.pinyin, chosen: null, correct: null };
+      var mc = practice._mcq[i];
+      var optsHtml = mc.options.map(function (op) {
+        var cls = "btn mcq" + (mc.chosen === op ? (mc.correct ? " ok" : " bad") : "");
+        return '<button class="' + cls + '" data-act="mcq" data-op="' + esc(op) + '">' + py(op) + "</button>";
+      }).join("");
       promptHtml =
         '<div class="big-word">' + esc(w.word) + "</div>" +
-        (revealed ? '<div class="big-pinyin">' + py(w.pinyin) + "</div>" : '<p class="muted">孩子看词语写拼音，写完后点“显示拼音”核对。</p>');
+        '<div class="muted" style="margin:8px 0 6px">选出发音正确的拼音：</div>' +
+        '<div class="mcq-grid">' + optsHtml + "</div>" +
+        (mc.chosen ? (mc.correct ? '<p class="ok-tip">✅ 答对啦！</p>' : '<p class="bad-tip">❌ 正确答案是：' + py(mc.answer) + "</p>") : "");
     }
 
     var pct = Math.round((i + 1) / total * 100);
@@ -287,9 +348,9 @@
       '<div class="prog"><div class="prog-fill" style="width:' + pct + '%"></div></div>' +
       "</div>" +
       promptHtml +
-      '<div class="row" style="justify-content:center;margin-top:18px">' +
-      '<button class="btn ghost" data-act="reveal">' + (revealed ? "隐藏答案" : "显示答案") + "</button>" +
-      "</div>" +
+      (practice.mode === "word2pin" ? "" :
+        '<div class="row" style="justify-content:center;margin-top:18px">' +
+        '<button class="btn ghost" data-act="reveal">' + (revealed ? "隐藏答案" : "显示答案") + "</button></div>") +
       "</div>" +
       '<div class="row between" style="margin-top:8px">' +
       '<button class="btn" data-act="prev" ' + (i === 0 ? "disabled" : "") + ">← 上一个</button>" +
@@ -635,9 +696,31 @@
     if (act === "start") return doStart();
     if (act === "read") return speak(practice.words[practice.idx].word);
     if (act === "reveal") { practice.revealed[practice.idx] = !practice.revealed[practice.idx]; return renderQuiz(); }
-    if (act === "next") { if (practice.idx < practice.words.length - 1) { practice.idx++; renderQuiz(); } return; }
+    // 看词写拼音：必须先选一个答案才能翻页
+    if (act === "next") {
+      if (practice.mode === "word2pin" && (!practice._mcq || !practice._mcq[practice.idx] || !practice._mcq[practice.idx].chosen))
+        return toast("请先选一个拼音答案哦");
+      if (practice.idx < practice.words.length - 1) { practice.idx++; renderQuiz(); }
+      return;
+    }
     if (act === "prev") { if (practice.idx > 0) { practice.idx--; renderQuiz(); } return; }
-    if (act === "toreview") { practice.phase = "review"; return renderReview(); }
+    if (act === "toreview") {
+      if (practice.mode === "word2pin" && (!practice._mcq || !practice._mcq[practice.idx] || !practice._mcq[practice.idx].chosen))
+        return toast("请先选一个拼音答案哦");
+      practice.phase = "review"; return renderReview();
+    }
+    // 看词写拼音 → 四选一答题
+    if (act === "mcq") {
+      var op = t.dataset.op, mi = practice.idx;
+      if (!practice._mcq) practice._mcq = {};
+      if (!practice._mcq[mi]) practice._mcq[mi] = { options: buildMcq(practice.words[mi]), answer: practice.words[mi].pinyin, chosen: null, correct: null };
+      var mc = practice._mcq[mi];
+      if (mc.chosen) return; // 已作答，不再更改
+      mc.chosen = op;
+      mc.correct = (op === mc.answer);
+      practice.results[mi] = { correct: mc.correct, wrongChars: mc.correct ? [] : [{ char: practice.words[mi].word, idx: 0, type: null }], type: null };
+      return renderQuiz();
+    }
 
     if (act === "judge") {
       var i = +t.dataset.i, v = t.dataset.v === "1";
@@ -672,9 +755,10 @@
     // 点击词语 → 田字格笔顺卡片
     if (act === "wstroke") { openStrokeModal(t.dataset.w, t.dataset.p); return; }
 
-    // 在线听写：播放全部笔顺（显示答案并逐笔动画+口播）/ 完成本题
+    // 在线听写/书写：播放全部笔顺（显示答案并逐字、逐笔动画+口播，左→右依次播放）/ 完成本题
     if (act === "on-playall") {
       practice.revealed[practice.idx] = true;
+      practice._play = true;
       return renderOnlineQuiz();
     }
     if (act === "on-done") { finishOnlineWord(); return; }
@@ -741,13 +825,13 @@
     }
   });
 
-  // 出题方式切换
+  // 出题方式切换（重新渲染，使“作答形式”标签随方式更新）
   view.addEventListener("click", function (e) {
     var b = e.target.closest("#modeSeg button");
     if (!b) return;
     if (!practice) practice = blankPractice(b.dataset.mode);
     else practice.mode = b.dataset.mode;
-    document.querySelectorAll("#modeSeg button").forEach(function (x) { x.classList.toggle("on", x === b); });
+    renderSetup();
   });
 
   // 听写形式切换（本子 / 在线）
@@ -976,19 +1060,28 @@
       });
     } catch (e) { el.innerHTML = ""; return null; }
   }
-  // 逐笔演示正确写法 + 口播笔画名（女播音员音色）
-  function revealWriter(wr, ch) {
-    if (!wr) return;
+  // 逐笔演示正确写法 + 口播笔画名（女播音员音色）；done 在该字全部笔画播完后回调
+  function revealWriter(wr, ch, done) {
+    if (!wr) { if (done) done(); return; }
     try { wr.hideCharacter(); } catch (e) {}
     var medians = (_strokeCache && _strokeCache[ch] && _strokeCache[ch].medians) || [];
     var n = medians.length, i = 0;
     (function step() {
-      if (i >= n) return;
+      if (i >= n) { if (done) done(); return; }
       var nm = strokeName(ch, i);
       if (nm) speak("第" + (i + 1) + "笔，" + nm);
       try {
         wr.animateStroke(i).then(function () { i++; step(); });
       } catch (e) { i++; step(); }
+    })();
+  }
+  // 多个字依次播放：先播左边，再播右边，不要同时播
+  function playAllStrokes(wrs, chars) {
+    var k = 0;
+    (function next() {
+      if (k >= wrs.length) return;
+      var wr = wrs[k], ch = chars[k]; k++;
+      revealWriter(wr, ch, next);
     })();
   }
 
@@ -1046,9 +1139,18 @@
     var i = practice.idx, w = practice.words[i], total = practice.words.length;
     var chars = w.word.split("").filter(isHanzi);
     var pct = Math.round((i + 1) / total * 100);
+    var isPin = practice.mode === "pin2word";
     var cells = chars.map(function (c, ci) {
       return '<div class="tian-cell"><div class="tian" id="on-' + ci + '"></div></div>';
     }).join("");
+    // 提示区：听写练习=报词+可读词；看拼音写词=只给拼音，不播音
+    var promptHtml = isPin
+      ? '<div class="big-pinyin">' + py(w.pinyin) + "</div>" +
+        (practice.revealed[i] ? '<div class="big-word">' + esc(w.word) + '</div><div class="pinyin">' + py(w.pinyin) + "</div>"
+          : '<p class="muted">看拼音，在空白田字格里默写；写完点“显示答案”对照笔顺。</p>')
+      : '<button class="btn primary read-btn" data-act="read">🔊 读词</button>' +
+        '<p class="muted">听老师读词，在空白田字格里默写；写完点“显示答案”对照笔顺。</p>' +
+        (practice.revealed[i] ? '<div class="big-word">' + esc(w.word) + '</div><div class="pinyin">' + py(w.pinyin) + "</div>" : "");
     view.innerHTML =
       '<div class="card quiz-stage">' +
       '<div class="quiz-topbar"><button class="icon-btn" data-act="exit">✕ 退出练习</button>' +
@@ -1056,22 +1158,24 @@
       '<div class="quiz-prog">' +
       '<div class="quiz-prog-row"><span class="quiz-prog-label">完成进度</span><span class="quiz-prog-pct">' + pct + "%</span></div>" +
       '<div class="prog"><div class="prog-fill" style="width:' + pct + '%"></div></div></div>' +
-      '<div class="row" style="justify-content:center;gap:10px;margin:6px 0">' +
-      '<button class="btn primary read-btn" data-act="read">🔊 读词</button>' +
-      '<button class="btn ghost" data-act="on-playall">▶ 播放笔顺</button>' +
-      "</div>" +
-      (practice.revealed[i] ? '<div class="big-word">' + esc(w.word) + '</div><div class="pinyin">' + py(w.pinyin) + "</div>"
-        : '<p class="muted">听老师读词，在空白田字格里默写；写完点“显示答案”对照笔顺。</p>') +
+      promptHtml +
       '<div class="tian-row" id="onRow" style="justify-content:center;margin-top:10px">' + cells + "</div>" +
-      '<div class="row" style="justify-content:center;margin-top:12px">' +
+      '<div class="row" style="justify-content:center;gap:10px;margin-top:12px">' +
       '<button class="btn ghost" data-act="reveal">' + (practice.revealed[i] ? "隐藏答案" : "显示答案") + "</button>" +
+      '<button class="btn ghost" data-act="on-playall">▶ 播放笔顺</button>' +
       '<button class="btn primary" data-act="on-done">完成本题 ✓</button>' +
       "</div></div>";
     setTimeout(function () {
+      var wrs = [];
       chars.forEach(function (c, ci) {
         var el = document.getElementById("on-" + ci);
-        if (el) { var wr = makeWriterQuiz(el, c); if (wr) { quizWriters.push(wr); if (practice.revealed[i]) revealWriter(wr, c); } }
+        if (el) { var wr = makeWriterQuiz(el, c); if (wr) wrs.push(wr); }
       });
+      quizWriters = wrs;
+      if (practice.revealed[i]) {
+        wrs.forEach(function (wr) { try { wr.showCharacter(); } catch (e) {} });
+        if (practice._play) { practice._play = false; playAllStrokes(wrs, chars); }
+      }
     }, 30);
   }
 
