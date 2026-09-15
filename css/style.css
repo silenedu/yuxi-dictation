@@ -305,6 +305,54 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--p
 .wcard { background: #fff; border-radius: 16px; padding: 14px 16px; margin-bottom: 10px; box-shadow: var(--shadow); display: flex; align-items: center; justify-content: space-between; gap: 10px; }
 .wcard .w-main { font-size: 24px; font-weight: 800; }
 
+/* ---------- 词语行可点击（点击查看笔顺卡片） ---------- */
+.list-row.clickable { cursor: pointer; transition: background .12s ease; }
+.list-row.clickable:hover { background: var(--primary-l); }
+.list-row.clickable:active { background: var(--line); }
+
+/* ---------- 田字格 / 笔顺动画 ---------- */
+.tian-row { display: flex; flex-wrap: wrap; gap: 16px; justify-content: center; }
+.tian-cell { display: flex; flex-direction: column; align-items: center; }
+
+/* 米字格背景（横竖中线 + 对角虚线），帮助小朋友摆正笔画位置 */
+.tian {
+  width: 120px; height: 120px;
+  border: 3px solid var(--primary);
+  border-radius: 10px;
+  box-shadow: var(--shadow);
+  background-color: #FFF7F1;
+  background-image:
+    linear-gradient(#FFC9B3 0 0),               /* 竖中线（实） */
+    linear-gradient(#FFC9B3 0 0),               /* 横中线（实） */
+    linear-gradient(45deg, transparent 49.4%, #FFD8C7 49.4% 50.6%, transparent 50.6%),
+    linear-gradient(-45deg, transparent 49.4%, #FFD8C7 49.4% 50.6%, transparent 50.6%);
+  background-repeat: no-repeat;
+  background-size:
+    2px 100%, 100% 2px,
+    100% 100%, 100% 100%;
+  background-position:
+    50% 0, 0 50%,
+    0 0, 0 0;
+}
+.tian-fallback {
+  width: 120px; height: 120px; border: 3px solid var(--primary); border-radius: 10px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 56px; font-weight: 800; color: var(--text); background: #FFF7F1;
+}
+
+/* ---------- 错因筛选 chips（仅“词语错”出现，不含“拼音错”） ---------- */
+.cause-row { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0 6px; }
+.cause-chip {
+  border: 2px solid var(--line); background: #fff; color: var(--muted);
+  border-radius: 999px; padding: 6px 14px; font-size: 13px; font-weight: 700;
+  cursor: pointer; font-family: inherit; transition: all .12s ease;
+}
+.cause-chip.on { background: var(--primary); border-color: var(--primary); color: #fff; }
+.cause-chip:active { transform: scale(0.96); }
+
+/* 在线听写：田字格面板间距 */
+.quiz-stage .tian-row { margin-top: 4px; }
+
 /* ---------- 平板（≥600px）：更宽、更大字号、多列卡片 ---------- */
 /* 说明：所有响应式覆盖都放在文件末尾，确保能覆盖上面同名的基础样式（避免被基础规则“反超”）。 */
 @media (min-width: 600px) {
