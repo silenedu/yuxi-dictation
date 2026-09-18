@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <meta name="theme-color" content="#FF8A5B" />
+  <meta name="theme-color" content="#3E534C" />
   <title>雨锡的默写本</title>
   <link rel="manifest" href="manifest.webmanifest" />
   <link rel="apple-touch-icon" href="icons/icon-192.png" />
@@ -47,7 +47,7 @@
   <script>
     (function () {
       if (!("serviceWorker" in navigator)) return;
-      var SW_VER = "v16";
+      var SW_VER = "v17";
       window.addEventListener("load", function () {
         navigator.serviceWorker.register("sw.js?v=" + SW_VER).catch(function () {});
       });
