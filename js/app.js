@@ -771,7 +771,7 @@
   }
 
   function pieChart(totals) {
-    var colors = { tone_same: "#5BC97A", shape_same: "#FF8A5B", stroke: "#FFC93C", pinyin: "#2BC4A8", unknown: "#9B6DD6" };
+    var colors = { tone_same: "#6E8B5A", shape_same: "#9E4636", stroke: "#C2933F", pinyin: "#4E6F73", unknown: "#9C8AAE" };
     var keys = Object.keys(totals);
     var sum = keys.reduce(function (a, k) { return a + totals[k]; }, 0);
     if (!sum) return '<p class="muted">暂无错字归因数据。</p>';
@@ -1186,7 +1186,7 @@
     try {
       return HanziWriter.create(el, ch, {
         width: 120, height: 120, padding: 8, showOutline: true, showCharacter: true,
-        strokeColor: "#FF8A5B", radicalColor: "#2BC4A8",
+        strokeColor: "#33302A", radicalColor: "#9E4636",
         strokeAnimationSpeed: 0.7, delayBetweenStrokes: 260, charDataLoader: HW_LOADER
       });
     } catch (e) { el.innerHTML = '<div class="tian-fallback">' + esc(ch) + "</div>"; return null; }
@@ -1201,10 +1201,10 @@
     try {
       w = HanziWriter.create(el, ch, {
         width: 120, height: 120, padding: 8, showOutline: false, showCharacter: false,
-        strokeColor: "#FF8A5B", radicalColor: "#2BC4A8",
+        strokeColor: "#33302A", radicalColor: "#9E4636",
         strokeAnimationSpeed: 0.7, delayBetweenStrokes: 260, charDataLoader: HW_LOADER,
         leniency: 2.2,               // 放宽匹配阈值：大致画出来就算对，别挫败孩子
-        highlightColor: "#3AA0FF",   // 笔顺提示高亮色：明显区别于孩子已写的珊瑚色
+        highlightColor: "#9E4636",   // 笔顺提示高亮色（朱批红）：明显区别于孩子已写的墨色笔画
         strokeHighlightSpeed: 1.2,   // 提示动画稍慢，看得清
         highlightOnComplete: true,   // 整字写对后整体高亮，作为正反馈
         onMistake: function (strokeData, strokeNum) {
